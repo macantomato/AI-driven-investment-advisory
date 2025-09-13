@@ -63,6 +63,10 @@ def db_ping():
         value = s.run("RETURN 1 AS value").single()["value"]
     return {"neo4j": "ok", "value": value}
 
+@app.get("/")
+def root():
+    return {"ok": True, "hint": "Use /health, /db/ping, /docs"}
+
 @app.post("/advice", response_model=AdviceResponse)
 def advice(req: AdviceRequest):
     # Minimal stub: equal weight, no DB/LLM yet
