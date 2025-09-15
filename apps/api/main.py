@@ -1,6 +1,6 @@
 from typing import Dict, List, Optional
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI, Body
 from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 from neo4j import GraphDatabase, Driver
@@ -53,7 +53,7 @@ class AdviceResponse(BaseModel):
     disclaimer: str
 
 
-#--------------------------------------- API Endpoints ----------------------------------------
+#--------------------------------------- API Endpoints GET ----------------------------------------
 @app.get("/health")
 def health():
     return {"status": "ok", "service": APP_NAME, "disclaimer": DISCLAIMER_LINK}
@@ -69,16 +69,17 @@ def db_ping():
 def root():
     return {"ok": True, "hint": "Use /health, /db/ping, /docs"}
 
-@app.post("/advice")
-def advice(_: Optional[dict] = None):
+
+#--------------------------------------- API Endpoints POST  ----------------------------------------
+@app.api_route("/advice", methods=["GET", "POST"])
+def advice(_: dict | None = Body(None)):
     items = list_assets_with_sectors()
     return {
         "query": "MATCH (a:Asset)-[:IN_SECTOR]->(s:Sector) RETURN a.ticker AS ticker, s.name AS sector ORDER BY ticker",
         "count": len(items),
-        "items": items,  # [{ "ticker": "AAPL", "sector": "Technology" }, ...]
+        "items": items,
         "disclaimer": DISCLAIMER_LINK,
     }
-    
 
 #--------------------------------------- Query funcs ----------------------------------------
 
