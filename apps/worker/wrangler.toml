@@ -1,4 +1,6 @@
 ﻿name = "advisor-worker"
 main = "src/index.js"
-compatibility_date = "2025-09-15"
+compatibility_date = "2025-09-14"
 workers_dev = true
+
+assets = { directory = "public" }
