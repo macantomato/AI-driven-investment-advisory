@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Optional
 import os
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from neo4j import GraphDatabase, Driver
 
 APP_NAME = "advisor-api"
-DISCLAIMER = "Educational only — NOT financial advice."
+DISCLAIMER_LINK = "Educational (@https://github.com/macantomato)"
 
 app = FastAPI(title="AI-Driven Investment Advisor (Educational)")
 
@@ -52,9 +52,11 @@ class AdviceResponse(BaseModel):
     rationale: str
     disclaimer: str
 
+
+#--------------------------------------- API Endpoints ----------------------------------------
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": APP_NAME, "disclaimer": DISCLAIMER}
+    return {"status": "ok", "service": APP_NAME, "disclaimer": DISCLAIMER_LINK}
 
 @app.get("/db/ping")
 def db_ping():
@@ -67,18 +69,26 @@ def db_ping():
 def root():
     return {"ok": True, "hint": "Use /health, /db/ping, /docs"}
 
-@app.post("/advice", response_model=AdviceResponse)
-def advice(req: AdviceRequest):
-    # Minimal stub: equal weight, no DB/LLM yet
-    unique = [t.strip().upper() for t in req.universe if t.strip()]
-    unique = list(dict.fromkeys(unique))
-    n = len(unique)
-    if n == 0:
-        return {"allocation": {}, "rationale": "No assets provided.", "disclaimer": DISCLAIMER}
-    weight = round(1.0 / n, 6)
-    allocation = {t: weight for t in unique}
-    rationale = (
-        f"Stub equal-weight across {n} assets (risk={req.risk}). "
-        f"LLM and graph logic will be added later. {DISCLAIMER}"
-    )
-    return AdviceResponse(allocation=allocation, rationale=rationale, disclaimer=DISCLAIMER)
+@app.post("/advice")
+def advice(_: Optional[dict] = None):
+    items = list_assets_with_sectors()
+    return {
+        "query": "MATCH (a:Asset)-[:IN_SECTOR]->(s:Sector) RETURN a.ticker AS ticker, s.name AS sector ORDER BY ticker",
+        "count": len(items),
+        "items": items,  # [{ "ticker": "AAPL", "sector": "Technology" }, ...]
+        "disclaimer": DISCLAIMER_LINK,
+    }
+    
+
+#--------------------------------------- Query funcs ----------------------------------------
+
+def list_assets_with_sectors() -> list[dict]:
+    drv = get_driver()
+    cypher = """
+    MATCH (a:Asset)-[:IN_SECTOR]->(s:Sector)
+    RETURN a.ticker AS ticker, s.name AS sector
+    ORDER BY ticker
+    """
+    with drv.session() as s:
+        return [dict(r) for r in s.run(cypher)]
+

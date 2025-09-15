@@ -1,0 +1,8 @@
+{
+  "version": 3,
+  "sources": ["../../../src/index.js"],
+  "sourceRoot": "C:\\Users\\macan\\AI-Driven-Financial-Advisory\\AI-driven-investment-advisory\\apps\\worker\\.wrangler\\tmp\\deploy-XfOmfq",
+  "sourcesContent": ["// Worker: serve static files from /public and proxy API calls to Render.\r\nconst API_BASE = \"https://api-advisor.onrender.com\"; // your Render API (no trailing slash)\r\n\r\nexport default {\r\n  async fetch(request, env) {\r\n    const url = new URL(request.url);\r\n    const path = url.pathname.replace(/\\/+$/, \"\") || \"/\";\r\n\r\n    // Proxy API endpoints\r\n    if (path === \"/health\" && request.method === \"GET\") {\r\n      return fetch(`${API_BASE}/health`, { headers: { \"cache-control\": \"no-store\" } });\r\n    }\r\n    if (path === \"/advice\" && request.method === \"POST\") {\r\n      const body = await request.text();\r\n      return fetch(`${API_BASE}/advice`, {\r\n        method: \"POST\",\r\n        headers: { \"content-type\": \"application/json\" },\r\n        body,\r\n      });\r\n    }\r\n\r\n    // Serve static assets from /public via assets binding\r\n    return env.ASSETS.fetch(request);\r\n  }\r\n};"],
+  "mappings": ";AACA,IAAM,WAAW;AAEjB,IAAO,gBAAQ;AAAA,EACb,MAAM,MAAM,SAAS,KAAK;AACxB,UAAM,MAAM,IAAI,IAAI,QAAQ,GAAG;AAC/B,UAAM,OAAO,IAAI,SAAS,QAAQ,QAAQ,EAAE,KAAK;AAGjD,QAAI,SAAS,aAAa,QAAQ,WAAW,OAAO;AAClD,aAAO,MAAM,GAAG,QAAQ,WAAW,EAAE,SAAS,EAAE,iBAAiB,WAAW,EAAE,CAAC;AAAA,IACjF;AACA,QAAI,SAAS,aAAa,QAAQ,WAAW,QAAQ;AACnD,YAAM,OAAO,MAAM,QAAQ,KAAK;AAChC,aAAO,MAAM,GAAG,QAAQ,WAAW;AAAA,QACjC,QAAQ;AAAA,QACR,SAAS,EAAE,gBAAgB,mBAAmB;AAAA,QAC9C;AAAA,MACF,CAAC;AAAA,IACH;AAGA,WAAO,IAAI,OAAO,MAAM,OAAO;AAAA,EACjC;AACF;",
+  "names": []
+}

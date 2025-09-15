@@ -19,19 +19,15 @@ document.getElementById("btnHealth").onclick = async () => {
 };
 
 document.getElementById("btnDbPing").onclick = async () => {
-    show({ loading: "/db-ping" });
-    try { show(await fetchJson("/db-ping")); } catch (e) { show({ error: String(e) }); }
+    show({ loading: "/db/ping" });
+    try { show(await fetchJson("/db/ping")); } catch (e) { show({ error: String(e) }); }
+
 }
 
 document.getElementById("btnAdvice").onclick = async () => {
   show({ loading: "/advice" });
   try {
-    const body = { risk: 3, universe: ["AAPL", "MSFT", "JNJ"] };
-    const data = await fetchJson("/advice", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    const data = await fetchJson(`/advice?t=${Date.now()}`, { method: "POST" }); 
     show(data);
   } catch (e) { show({ error: String(e) }); }
 };
