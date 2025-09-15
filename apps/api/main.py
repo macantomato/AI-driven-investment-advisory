@@ -85,6 +85,7 @@ def advice(_: dict | None = Body(None)):
         "count": len(items),
         "items": items,
         "disclaimer": DISCLAIMER_LINK,
+        "rationale": llm_explain([r["ticker"] for r in items][:8], 3) or "LLM not configured",
     }
 
 @app.post("/explain")
