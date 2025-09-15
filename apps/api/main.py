@@ -141,7 +141,7 @@ def llm_explain(tickers: list[str], risk: int) -> str | None:
         return None
     try:
         response = client.chat.completions.create(
-            model="llama3-8b-8192",
+            model="meta-llama/llama-4-scout-17b-16e-instruct",
             temperatur=0.2,
             max_tokens=220,
             messages=[
