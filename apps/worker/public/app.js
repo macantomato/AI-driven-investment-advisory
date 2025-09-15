@@ -25,14 +25,6 @@ document.getElementById("btnDbPing").onclick = async () => {
 
 document.getElementById("btnAdvice").onclick = async () => {
   show({ loading: "/advice" });
-  try {
-    const body = { risk: 3, universe: ["AAPL", "MSFT", "JNJ"] };
-    const data = await fetchJson("/advice", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    show(data);
-  } catch (e) { show({ error: String(e) }); }
+    try { show(await fetchJson("/advice")); } catch (e) { show({ error: String(e) }); }
 };
 
