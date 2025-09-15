@@ -8,7 +8,13 @@ from neo4j import GraphDatabase, Driver
 APP_NAME = "advisor-api"
 DISCLAIMER_LINK = "Educational (@https://github.com/macantomato)"
 
+
 app = FastAPI(title="AI-Driven Investment Advisor (Educational)")
+#--------------------------------------- LLM Client ----------------------------------------
+try:
+    from openai import OpenAI
+except Exception:
+    OpenAI = None
 
 # --- CORS: allow local Vite and future Cloudflare Pages deployments ---
 allowed_origins = ["http://localhost:5173"]            # Vite dev server
@@ -81,7 +87,30 @@ def advice(_: dict | None = Body(None)):
         "disclaimer": DISCLAIMER_LINK,
     }
 
-#--------------------------------------- Query funcs ----------------------------------------
+@app.post("/explain")
+def explain(payload: dict | None = Body(None)):
+    risk = int(payload.get("risk", 3)) if payload else 3
+    universe = payload.get("universe") if payload else None
+
+    if not universe:
+        rows = list_assets_with_sectors()
+        tickers = [r["ticker"] for r in rows][:8]
+    else:
+        tickers = [t.strip().upper() for t in universe if t and t.strip()]
+        tickers = list(dict.fromkeys(tickers))[:8]
+
+    text = llm_explain(tickers, risk)
+    rationale = text or (
+        f"Stub rationale for risk={risk} and tickers={tickers}. "
+        f"{DISCLAIMER_LINK}"
+    )
+    return {
+        "risk": risk,
+        "tickers_used": tickers,
+        "rationale": rationale,
+        "disclaimer": DISCLAIMER_LINK,
+    }
+#--------------------------------------- Query/Cypher funcs ----------------------------------------
 
 def list_assets_with_sectors() -> list[dict]:
     drv = get_driver()
@@ -93,3 +122,37 @@ def list_assets_with_sectors() -> list[dict]:
     with drv.session() as s:
         return [dict(r) for r in s.run(cypher)]
 
+#--------------------------------------- Groq LLM funcs ----------------------------------------
+_llm_client = None
+
+def get_llm():
+    global _llm_client
+    if _llm_client is not None:
+        return _llm_client
+    api_key = os.getenv("GROQ_KEY")
+    if not api_key or OpenAI is None:
+        return None
+    _llm_client = OpenAI(base_url="https://api.groq.com/openai/v1", api_key=api_key)
+    return _llm_client
+
+def llm_explain(tickers: list[str], risk: int) -> str | None:
+    client = get_llm()
+    if client is None:
+        return None
+    try:
+        response = client.chat.completions.create(
+            model="llama3-8b-8192",
+            temperatur=0.2,
+            max_tokens=220,
+            messages=[
+                {"role": "system", "content": "You are a professional investment advisor."
+                 "Be brief (80-120 words). Use plain language. "},
+                 {"role": "user", "content":
+                 f"Risk level: {risk} (1–5). Universe tickers: {', '.join(tickers)}. "
+                 "Explain a simple rationale for an equal-weight learning example and note any missing data briefly."},
+            ], timeout=20,
+        )
+        text = (response.choice[0].message.content or "").strip()
+        return text or None
+    except Exception:
+        return None
