@@ -129,7 +129,7 @@ def get_llm():
     global _llm_client
     if _llm_client is not None:
         return _llm_client
-    api_key = os.getenv("GROQ_KEY")
+    api_key = os.getenv("GROQ_API_KEY")
     if not api_key or OpenAI is None:
         return None
     _llm_client = OpenAI(base_url="https://api.groq.com/openai/v1", api_key=api_key)
@@ -142,7 +142,7 @@ def llm_explain(tickers: list[str], risk: int) -> str | None:
     try:
         response = client.chat.completions.create(
             model="meta-llama/llama-4-scout-17b-16e-instruct",
-            temperatur=0.2,
+            temperature=0.2,
             max_tokens=220,
             messages=[
                 {"role": "system", "content": "You are a professional investment advisor."
@@ -152,7 +152,7 @@ def llm_explain(tickers: list[str], risk: int) -> str | None:
                  "Explain a simple rationale for an equal-weight learning example and note any missing data briefly."},
             ], timeout=20,
         )
-        text = (response.choice[0].message.content or "").strip()
+        text = (response.choices[0].message.content or "").strip()
         return text or None
     except Exception:
         return None
