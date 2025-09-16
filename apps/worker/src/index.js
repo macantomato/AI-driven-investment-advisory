@@ -21,6 +21,10 @@ export default {
         body,
       });
     }
+    if (path.startsWith("/asset/") && request.method === "GET") {
+      const ticker = encodeURIComponent(path.slice(7));
+      return fetch(`${API_BASE}/asset/${ticker}`, { headers: { "cache-control": "no-store" } });
+    }
 
     // Serve static assets from /public via assets binding
     return env.ASSETS.fetch(request);
