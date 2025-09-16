@@ -1,7 +1,7 @@
 from typing import Dict, List, Optional, Any
 import os
 import re
-from fastapi import FastAPI, Body, Query
+from fastapi import FastAPI, Body, Query, Path
 from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 from neo4j import GraphDatabase, Driver
@@ -96,6 +96,30 @@ def universe(
         print("[/universe] ERROR:", type(e).__name__, str(e))
         raise HTTPException(status_code=500, detail="Database read failed")
 
+@app.get("/asset/{ticker}")
+def asset_details(
+    ticker: str = Path(..., description="Ticker symbol, example AAGL, MSFT,")
+):
+    try:
+        drv = get_driver()
+        cypher = """
+        MATCH (a:Asset)-[:IN_SECTOR]->(s:Sector)
+        WHERE toUpper(a.ticker) = toUpper($ticker)
+        RETURN a.ticker AS ticker,
+               coalesce(a.name, a.ticker) AS name,
+               coalesce(s.name, 'Unknown') AS sector
+        LIMIT 1
+        """
+        with drv.session() as s:
+            record = s.run(cypher, ticker=ticker).single()
+        if not record:
+            raise HTTPException(status_code=404, detail="Asset not found")
+        return {"item": dict(record), "disclaimer": DISCLAIMER_LINK}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print("[/asset/{ticker}] ERROR:", type(e).__name__, str(e))
+        raise HTTPException(status_code=500, detail="Database read failed")
 
 #--------------------------------------- API Endpoints POST  ----------------------------------------
 @app.api_route("/advice", methods=["GET", "POST"])
