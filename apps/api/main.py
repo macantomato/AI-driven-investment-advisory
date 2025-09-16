@@ -13,12 +13,29 @@ DISCLAIMER_LINK = "Educational (@https://github.com/macantomato)"
 
 app = FastAPI(title="AI-Driven Investment Advisor (Educational)")
 
+#--------------------------------------- Startup Events ----------------------------------------
+
+
 @app.on_event("startup")
 def _startup_check():
     # Ensures env vars exist and driver can connect
     drv = get_driver()
     with drv.session() as s:
         s.run("RETURN 1")
+
+@app.on_event("/startup")
+def _startup_check():
+    drv = get_driver()
+    with drv.session() as s:
+        s.run("RETURN 1")
+        #uniqness constraints
+        s.run("""CREATE COSNSTRAINT asset_ticker_unique IF NOT EXISTS FOR (a:ASSET) 
+            REQUIRE a.ticker IS UNIQUE""")
+        s.run("""CREATE INDEX sector_name_index IF NOT EXISTS FOR (s:section) ON (s.name)""")
+    
+
+
+
 #--------------------------------------- LLM Client ----------------------------------------
 try:
     from openai import OpenAI
@@ -156,6 +173,8 @@ def explain(payload: dict | None = Body(None)):
         "rationale": rationale,
         "disclaimer": DISCLAIMER_LINK,
     }
+#next to do is POST for upsert assets (endpoint)
+
 #--------------------------------------- Query/Cypher funcs ----------------------------------------
 
 # def list_assets_with_sectors() -> list[dict]:
@@ -181,6 +200,30 @@ def list_assets_with_sectors(sector: Optional[str] = None, limit: int = 100) -> 
     with drv.session() as s:
         return [dict(r) for r in s.run(cypher, **params)]
 
+def upsert_assets(rows: List[Dict[str, Any]]) -> int:
+    drv = get_driver()
+    cypher = """
+    UNWIND $rows AS row
+    WITH ROW
+    WHERE row.ticker IS NOT NULL AND TRIM(row.tricker)
+    
+    MERGE(a:asset {ticker: toUpper(row.ticker)})
+      ON CREATE SET a.name = coalesce(row.name, row.ticker)
+      ON MATCH SET a.name = coalesce(row.name, a.name)
+      
+    MERGE (s:sector {name: coalesce(row.sector, 'Uknown')})
+    
+    MERGE (a)-[:IN_SECTOR]->(s)
+    
+    WITH a, coalesce(row.props, {}) AS p
+    SET a += p
+    
+    RETURN count(a) AS upserted
+    """
+    with drv.session() as s:
+        rec = s.run(cypher, rows=rows).single()
+        return int(rec["upserted"] if rec and "upserted" in rec else 0)
+    
 #--------------------------------------- Groq LLM funcs ----------------------------------------
 _llm_client = None
 
