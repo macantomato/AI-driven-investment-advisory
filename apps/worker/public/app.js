@@ -23,6 +23,15 @@ document.getElementById("btnDbPing").onclick = async () => {
     try { show(await fetchJson("/db/ping")); } catch (e) { show({ error: String(e) }); }
 }
 
+document.getElementById("btnAsset").onclick = async () => {
+    const t = document.getElementById("assetticker").value;
+    show({ Loading: `/asset/${t}`});
+    try { show(await fetchJson(`/asset/${encodeURIComponent(t)}`)); }
+    catch (e) { show({ error: String(e) }); }
+};
+
+
+
 document.getElementById("btnAdvice").onclick = async () => {
   show({ loading: "/advice" });
   try {
