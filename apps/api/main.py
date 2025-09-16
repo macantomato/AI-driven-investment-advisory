@@ -1,7 +1,7 @@
 from typing import Dict, List, Optional, Any
 import os
 import re
-from fastapi import FastAPI, Body
+from fastapi import FastAPI, Body, Query
 from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 from neo4j import GraphDatabase, Driver
@@ -84,6 +84,18 @@ def db_ping():
 def root():
     return {"ok": True, "hint": "Use /health, /db/ping, /docs"}
 
+@app.get("/universe")
+def universe(
+    sector: Optional[str] = Query(default=None, description="Exact sector name (case-insensitive)"),
+    limit: int = Query(default=100, ge=1, le=500, description="Max rows")
+):
+    try:
+        rows = list_assets_with_sectors(sector=sector, limit=limit)
+        return {"count": len(rows), "items": rows, "disclaimer": DISCLAIMER_LINK}
+    except Exception as e:
+        print("[/universe] ERROR:", type(e).__name__, str(e))
+        raise HTTPException(status_code=500, detail="Database read failed")
+
 
 #--------------------------------------- API Endpoints POST  ----------------------------------------
 @app.api_route("/advice", methods=["GET", "POST"])
@@ -122,15 +134,28 @@ def explain(payload: dict | None = Body(None)):
     }
 #--------------------------------------- Query/Cypher funcs ----------------------------------------
 
-def list_assets_with_sectors() -> list[dict]:
+# def list_assets_with_sectors() -> list[dict]:
+#     drv = get_driver()
+#     cypher = """
+#     MATCH (a:Asset)-[:IN_SECTOR]->(s:Sector)
+#     RETURN a.ticker AS ticker, s.name AS sector
+#     ORDER BY ticker
+#     """
+#     with drv.session() as s:
+#         return [dict(r) for r in s.run(cypher)]
+
+def list_assets_with_sectors(sector: Optional[str] = None, limit: int = 100) -> list[dict]:
     drv = get_driver()
     cypher = """
     MATCH (a:Asset)-[:IN_SECTOR]->(s:Sector)
-    RETURN a.ticker AS ticker, s.name AS sector
+    {where}
+    RETURN a.ticker AS ticker, coalesce(s.name, 'Unknown') AS sector
     ORDER BY ticker
-    """
+    LIMIT $limit
+    """.replace("{where}", "WHERE toUpper(s.name) = toUpper($sector)" if sector else "")
+    params = {"sector": sector, "limit": int(limit)}
     with drv.session() as s:
-        return [dict(r) for r in s.run(cypher)]
+        return [dict(r) for r in s.run(cypher, **params)]
 
 #--------------------------------------- Groq LLM funcs ----------------------------------------
 _llm_client = None
