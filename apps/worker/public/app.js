@@ -24,7 +24,7 @@ document.getElementById("btnDbPing").onclick = async () => {
 }
 
 document.getElementById("btnAsset").onclick = async () => {
-    const t = document.getElementById("assetticker").value;
+    const t = document.getElementById("assetTicker").value;
     show({ Loading: `/asset/${t}`});
     try { show(await fetchJson(`/asset/${encodeURIComponent(t)}`)); }
     catch (e) { show({ error: String(e) }); }
