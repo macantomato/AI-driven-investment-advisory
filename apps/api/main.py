@@ -1,9 +1,11 @@
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 import os
+import re
 from fastapi import FastAPI, Body
 from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 from neo4j import GraphDatabase, Driver
+from fastapi import HTTPException
 
 APP_NAME = "advisor-api"
 DISCLAIMER_LINK = "Educational (@https://github.com/macantomato)"
@@ -157,3 +159,36 @@ def llm_explain(tickers: list[str], risk: int) -> str | None:
         return text or None
     except Exception:
         return None
+    
+
+#--------------------------------------- MCP cypher endpoint ----------------------------------------
+READONLY_BLOCK = re.compile(
+    r"\b("
+    r"CREATE|MERGE|SET|DELETE|REMOVE|FOREACH|DROP|RENAME|TRUNCATE|"
+    r"LOAD\s+CSV|CALL\s+dbms|CALL\s+db\.|CALL\s+apoc\.(?!meta|help)"  # allow only apoc.meta/help
+    r")\b",
+    re.IGNORECASE,
+)
+
+class CypherRequest(BaseModel):
+    query: str
+    params: Dict[str, Any] = Field(default_factory=dict)
+
+@app.post("/cypher")
+def cypher(req: CypherRequest):
+    q = req.query.strip()
+    if READONLY_BLOCK.search(q):
+        raise HTTPException(status_code=400, detail="Write/Unsafe queries not allowed.")
+    if not re.match(r"^(MATCH|RETURN|WITH|CALL|EXPLAIN|PROFILE)\b", q, re.IGNORECASE):
+        raise HTTPException(status_code=400, detail="Only read-only queries allowed.")
+    try:
+        with driver.session() as session:
+            result = session.run(q, **req.params)
+            rows = [r.data() for r in result]
+            cols = list(result.keys())
+        return {"columns": cols, "rows": rows, "count": len(rows)}
+    except Exception as e:
+        # return short, non-sensitive error
+        raise HTTPException(status_code=500, detail=f"Cypher error: {type(e).__name__}")
+
+
