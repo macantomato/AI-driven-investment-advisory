@@ -26,9 +26,15 @@ def _startup_check_and_constraints():
         CREATE CONSTRAINT asset_ticker_unique IF NOT EXISTS
         FOR (a:Asset) REQUIRE a.ticker IS UNIQUE
         """)
+        # index for sctors
         s.run("""
         CREATE INDEX sector_name_idx IF NOT EXISTS
         FOR (s:Sector) ON (s.name)
+        """)
+        # Unique constraint for sectors
+        s.run("""
+        CREATE CONSTRAINT sector_name_unique OF NOT EXISTS
+              FOR (s:sector) REQUIRE s.name IS UNIQUE
         """)
     
 
