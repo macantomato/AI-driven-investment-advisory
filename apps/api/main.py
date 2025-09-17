@@ -174,6 +174,22 @@ def explain(payload: dict | None = Body(None)):
         "disclaimer": DISCLAIMER_LINK,
     }
 #next to do is POST for upsert assets (endpoint)
+class IngestAsset(BaseModel):
+    ticker: str
+    name: Optional[str] = None
+    sector: Optional[str] = None
+    props: Dict[str, Any] = Field(default_factory=dict)
+
+@app.post("/ingest/assets")
+def ingest_assets(payload: List[IngestAsset]):
+    try:
+        rows = [p.dict() for p in payload]
+        n = upsert_assets(rows)
+        return {"ingested": n, "disclaimer": DISCLAIMER_LINK}
+    except Exception as e:
+        print("[/ingest/assets] ERROR:", type(e).__name__, str(e))
+        raise HTTPException(status_code=500, detail="Ingest failed")
+
 
 #--------------------------------------- Query/Cypher funcs ----------------------------------------
 
