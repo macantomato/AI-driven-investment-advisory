@@ -3,3 +3,4 @@ uvicorn[standard]>=0.30,<0.31 #changed to more range
 pydantic>=2.8,<2.9 
 neo4j>=5.21,<5.22
 openai>=1.40,<2.0
+finnhub-python
