@@ -20,6 +20,7 @@ app = FastAPI(title="AI-Driven Investment Advisor (Educational)")
 def _startup_check_and_constraints():
     drv = get_driver()
     with drv.session() as s:
+        # connectivity check
         s.run("RETURN 1")
         s.run("""
         CREATE CONSTRAINT asset_ticker_unique IF NOT EXISTS
@@ -178,15 +179,14 @@ class IngestAsset(BaseModel):
     props: Dict[str, Any] = Field(default_factory=dict)
 
 @app.post("/ingest/assets")
-def ingest_assets(payload: List[IngestAsset] = Body(...)):
+def ingest_assets(payload: List[IngestAsset]):
     try:
         rows = [p.model_dump() if hasattr(p, "model_dump") else p.dict() for p in payload]
-        summary = upsert_assets(rows)
-        return {"received": len(rows), **summary, "disclaimer": DISCLAIMER_LINK}
+        n = upsert_assets(rows)
+        return {"ingested": n, "disclaimer": DISCLAIMER_LINK}
     except Exception as e:
         print("[/ingest/assets] ERROR:", type(e).__name__, str(e))
         raise HTTPException(status_code=500, detail="Ingest failed")
-
 
 
 #--------------------------------------- Query/Cypher funcs ----------------------------------------
@@ -214,7 +214,7 @@ def list_assets_with_sectors(sector: Optional[str] = None, limit: int = 100) -> 
     with drv.session() as s:
         return [dict(r) for r in s.run(cypher, **params)]
 
-def upsert_assets(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+def upsert_assets(rows: List[Dict[str, Any]]) -> int:
     drv = get_driver()
     cypher = """
     UNWIND $rows AS row
@@ -222,33 +222,20 @@ def upsert_assets(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     WHERE row.ticker IS NOT NULL AND trim(row.ticker) <> ''
 
     MERGE (a:Asset {ticker: toUpper(row.ticker)})
-      ON CREATE SET a.name = coalesce(row.name, row.ticker), a._new = true
+      ON CREATE SET a.name = coalesce(row.name, row.ticker)
       ON MATCH  SET a.name = coalesce(row.name, a.name)
 
     MERGE (s:Sector {name: coalesce(row.sector, 'Unknown')})
     MERGE (a)-[:IN_SECTOR]->(s)
 
-    WITH a, coalesce(row.props, {}) AS p, exists(a._new) AS isNew
+    WITH a, coalesce(row.props, {}) AS p
     SET a += p
-    REMOVE a._new
 
-    RETURN
-      count(a) AS total_touched,
-      sum(CASE WHEN isNew THEN 1 ELSE 0 END) AS created_count,
-      collect({ticker: a.ticker, created: isNew}) AS results
+    RETURN count(a) AS n
     """
     with drv.session() as s:
         rec = s.run(cypher, rows=rows).single()
-        results = rec["results"] or []
-        created = [r["ticker"] for r in results if r["created"]]
-        updated = [r["ticker"] for r in results if not r["created"]]
-        return {
-            "total_touched": int(rec["total_touched"]),
-            "created_count": int(rec["created_count"]),
-            "updated_count": len(updated),
-            "created_tickers": created,
-            "updated_tickers": updated,
-        }
+        return int(rec["n"] if rec and "n" in rec else 0)
     
 #--------------------------------------- Groq LLM funcs ----------------------------------------
 _llm_client = None
