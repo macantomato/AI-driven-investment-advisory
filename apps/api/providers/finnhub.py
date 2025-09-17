@@ -43,7 +43,7 @@ def fetch_profiles(tickers: list[str]) -> list[dict]:
         }
 
         #clean props of empty values
-        props = {k: v for k, v in props.item() if v not in (None, "", 0, [])}
+        props = {k: v for k, v in props.items() if v not in (None, "", 0, [])}
 
         rows.append({"ticker": sym, "name": name, "sector": sector, "props": props})
 
