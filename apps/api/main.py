@@ -181,9 +181,8 @@ class IngestAsset(BaseModel):
 def ingest_assets(payload: List[IngestAsset] = Body(...)):
     try:
         rows = [p.model_dump() if hasattr(p, "model_dump") else p.dict() for p in payload]
-        n = upsert_assets(rows)
-        # helpful debug for now
-        return {"ingested": n, "received": len(rows), "preview": rows[:1], "disclaimer": DISCLAIMER_LINK}
+        summary = upsert_assets(rows)
+        return {"received": len(rows), **summary, "disclaimer": DISCLAIMER_LINK}
     except Exception as e:
         print("[/ingest/assets] ERROR:", type(e).__name__, str(e))
         raise HTTPException(status_code=500, detail="Ingest failed")
@@ -215,7 +214,7 @@ def list_assets_with_sectors(sector: Optional[str] = None, limit: int = 100) -> 
     with drv.session() as s:
         return [dict(r) for r in s.run(cypher, **params)]
 
-def upsert_assets(rows: List[Dict[str, Any]]) -> int:
+def upsert_assets(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     drv = get_driver()
     cypher = """
     UNWIND $rows AS row
@@ -223,20 +222,33 @@ def upsert_assets(rows: List[Dict[str, Any]]) -> int:
     WHERE row.ticker IS NOT NULL AND trim(row.ticker) <> ''
 
     MERGE (a:Asset {ticker: toUpper(row.ticker)})
-      ON CREATE SET a.name = coalesce(row.name, row.ticker)
+      ON CREATE SET a.name = coalesce(row.name, row.ticker), a._new = true
       ON MATCH  SET a.name = coalesce(row.name, a.name)
 
     MERGE (s:Sector {name: coalesce(row.sector, 'Unknown')})
     MERGE (a)-[:IN_SECTOR]->(s)
 
-    WITH a, coalesce(row.props, {}) AS p
+    WITH a, coalesce(row.props, {}) AS p, exists(a._new) AS isNew
     SET a += p
+    REMOVE a._new
 
-    RETURN count(a) AS n
+    RETURN
+      count(a) AS total_touched,
+      sum(CASE WHEN isNew THEN 1 ELSE 0 END) AS created_count,
+      collect({ticker: a.ticker, created: isNew}) AS results
     """
     with drv.session() as s:
         rec = s.run(cypher, rows=rows).single()
-        return int(rec["n"] if rec and "n" in rec else 0)
+        results = rec["results"] or []
+        created = [r["ticker"] for r in results if r["created"]]
+        updated = [r["ticker"] for r in results if not r["created"]]
+        return {
+            "total_touched": int(rec["total_touched"]),
+            "created_count": int(rec["created_count"]),
+            "updated_count": len(updated),
+            "created_tickers": created,
+            "updated_tickers": updated,
+        }
     
 #--------------------------------------- Groq LLM funcs ----------------------------------------
 _llm_client = None
