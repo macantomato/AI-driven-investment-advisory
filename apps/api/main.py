@@ -271,7 +271,7 @@ def upsert_assets(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     MERGE (s:Sector {name: coalesce(row.sector, 'Unknown')})
     MERGE (a)-[:IN_SECTOR]->(s)
 
-    WITH a, coalesce(row.props, {}) AS p, exists(a._new) AS isNew
+    WITH a, coalesce(row.props, {}) AS p, (a._new IS NOT NULL) AS isNew
     SET a += p
     REMOVE a._new
 
