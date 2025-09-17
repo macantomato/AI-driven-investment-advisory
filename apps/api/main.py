@@ -20,9 +20,7 @@ app = FastAPI(title="AI-Driven Investment Advisor (Educational)")
 def _startup_check_and_constraints():
     drv = get_driver()
     with drv.session() as s:
-        # connectivity check
         s.run("RETURN 1")
-        # idempotent graph hygiene
         s.run("""
         CREATE CONSTRAINT asset_ticker_unique IF NOT EXISTS
         FOR (a:Asset) REQUIRE a.ticker IS UNIQUE
@@ -180,14 +178,16 @@ class IngestAsset(BaseModel):
     props: Dict[str, Any] = Field(default_factory=dict)
 
 @app.post("/ingest/assets")
-def ingest_assets(payload: List[IngestAsset]):
+def ingest_assets(payload: List[IngestAsset] = Body(...)):
     try:
         rows = [p.model_dump() if hasattr(p, "model_dump") else p.dict() for p in payload]
         n = upsert_assets(rows)
-        return {"ingested": n, "disclaimer": DISCLAIMER_LINK}
+        # helpful debug for now
+        return {"ingested": n, "received": len(rows), "preview": rows[:1], "disclaimer": DISCLAIMER_LINK}
     except Exception as e:
         print("[/ingest/assets] ERROR:", type(e).__name__, str(e))
         raise HTTPException(status_code=500, detail="Ingest failed")
+
 
 
 #--------------------------------------- Query/Cypher funcs ----------------------------------------
