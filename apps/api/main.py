@@ -111,6 +111,33 @@ def universe(
         print("[/universe] ERROR:", type(e).__name__, str(e))
         raise HTTPException(status_code=500, detail="Database read failed")
 
+@app.get("/search")
+def search(
+    q: str = Query(..., min_length=1, max_length=10,
+                   description="Search ticker or name (case-insensitive prefix)"),
+    limit: int = Query(default=20, ge=1, le=100, description="Max rows to return")
+):
+    try:
+        drv = get_driver()
+        with drv.session() as s:
+            cypher = """
+            MATCH (a:Asset)-[:IN_SECTOR]->(s:Sector)
+            WHERE toUpper(a.ticker) STARTS WITH toUpper($q)
+               OR toUpper(a.name)   STARTS WITH toUpper($q)
+            RETURN a.ticker AS ticker,
+                   coalesce(a.name, a.ticker) AS name,
+                   coalesce(s.name, 'Unknown') AS sector
+            ORDER BY ticker
+            LIMIT $limit
+            """
+            result = s.run(cypher, q=q, limit=int(limit))
+            rows = [dict(r) for r in result]
+        return {"count": len(rows), "items": rows, "disclaimer": DISCLAIMER_LINK}
+    except Exception as e:
+        print("[/search] ERROR:", type(e).__name__, str(e))
+        raise HTTPException(status_code=500, detail="Database read failed")
+
+
 @app.get("/asset/{ticker}")
 def asset_details(
     ticker: str = Path(..., description="Ticker symbol, example AAGL, MSFT,")
