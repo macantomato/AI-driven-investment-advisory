@@ -16,15 +16,21 @@ app = FastAPI(title="AI-Driven Investment Advisor (Educational)")
 #--------------------------------------- Startup Events ----------------------------------------
 
 
-@app.on_event("/startup")
-def _startup_check():
+@app.on_event("startup")
+def _startup_check_and_constraints():
     drv = get_driver()
     with drv.session() as s:
+        # connectivity check
         s.run("RETURN 1")
-        #uniqness constraints
-        s.run("""CREATE COSNSTRAINT asset_ticker_unique IF NOT EXISTS FOR (a:ASSET) 
-            REQUIRE a.ticker IS UNIQUE""")
-        s.run("""CREATE INDEX sector_name_index IF NOT EXISTS FOR (s:section) ON (s.name)""")
+        # idempotent graph hygiene
+        s.run("""
+        CREATE CONSTRAINT asset_ticker_unique IF NOT EXISTS
+        FOR (a:Asset) REQUIRE a.ticker IS UNIQUE
+        """)
+        s.run("""
+        CREATE INDEX sector_name_idx IF NOT EXISTS
+        FOR (s:Sector) ON (s.name)
+        """)
     
 
 
@@ -176,7 +182,7 @@ class IngestAsset(BaseModel):
 @app.post("/ingest/assets")
 def ingest_assets(payload: List[IngestAsset]):
     try:
-        rows = [p.dict() for p in payload]
+        rows = [p.model_dump() if hasattr(p, "model_dump") else p.dict() for p in payload]
         n = upsert_assets(rows)
         return {"ingested": n, "disclaimer": DISCLAIMER_LINK}
     except Exception as e:
@@ -213,25 +219,24 @@ def upsert_assets(rows: List[Dict[str, Any]]) -> int:
     drv = get_driver()
     cypher = """
     UNWIND $rows AS row
-    WITH ROW
-    WHERE row.ticker IS NOT NULL AND TRIM(row.tricker)
-    
-    MERGE(a:asset {ticker: toUpper(row.ticker)})
+    WITH row
+    WHERE row.ticker IS NOT NULL AND trim(row.ticker) <> ''
+
+    MERGE (a:Asset {ticker: toUpper(row.ticker)})
       ON CREATE SET a.name = coalesce(row.name, row.ticker)
-      ON MATCH SET a.name = coalesce(row.name, a.name)
-      
-    MERGE (s:sector {name: coalesce(row.sector, 'Uknown')})
-    
+      ON MATCH  SET a.name = coalesce(row.name, a.name)
+
+    MERGE (s:Sector {name: coalesce(row.sector, 'Unknown')})
     MERGE (a)-[:IN_SECTOR]->(s)
-    
+
     WITH a, coalesce(row.props, {}) AS p
     SET a += p
-    
-    RETURN count(a) AS upserted
+
+    RETURN count(a) AS n
     """
     with drv.session() as s:
         rec = s.run(cypher, rows=rows).single()
-        return int(rec["upserted"] if rec and "upserted" in rec else 0)
+        return int(rec["n"] if rec and "n" in rec else 0)
     
 #--------------------------------------- Groq LLM funcs ----------------------------------------
 _llm_client = None
