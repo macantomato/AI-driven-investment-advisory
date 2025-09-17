@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 from neo4j import GraphDatabase, Driver
 from fastapi import HTTPException
+from providers.finnhub import fetch_profiles
 
 APP_NAME = "advisor-api"
 DISCLAIMER_LINK = "Educational (@https://github.com/macantomato)"
@@ -168,6 +169,22 @@ def asset_details(
     except Exception as e:
         print("[/asset/{ticker}] ERROR:", type(e).__name__, str(e))
         raise HTTPException(status_code=500, detail="Database read failed")
+
+@app.get("/ingest/finnhub")
+def ingest_finnhub(
+    tickers: List[str] = Query(..., min_length=1, description="List of tickers/symbols to fetch and ingest (max 50)"),
+):
+    if len(tickers) > 50:
+        raise HTTPException(status_code=400, detail="Max 50 tickers allowed")
+    try:
+        profiles = fetch_profiles(tickers)
+        if not profiles:
+            return {"ingested": 0, "detail": "No valid profiles found", "disclaimer": DISCLAIMER_LINK}
+        summary = upsert_assets(profiles)
+        return {"ingested": len(profiles), **summary, "disclaimer": DISCLAIMER_LINK}
+    except Exception as e:
+        print("[/ingest/finnhub] ERROR:", type(e).__name__, str(e))
+        raise HTTPException(status_code=500, detail="Ingest failed")
 
 #--------------------------------------- API Endpoints POST  ----------------------------------------
 @app.api_route("/advice", methods=["GET", "POST"])
