@@ -172,16 +172,18 @@ def asset_details(
 
 @app.get("/ingest/finnhub")
 def ingest_finnhub(
-    tickers: List[str] = Query(..., min_length=1, description="List of tickers/symbols to fetch and ingest (max 50)"),
+    tickers: List[str] = Query(..., min_items = 1, max_items = 50,  description="List of tickers/symbols to fetch and ingest (max 50)"),
 ):
     if len(tickers) > 50:
         raise HTTPException(status_code=400, detail="Max 50 tickers allowed")
     try:
         profiles = fetch_profiles(tickers)
         if not profiles:
-            return {"ingested": 0, "detail": "No valid profiles found", "disclaimer": DISCLAIMER_LINK}
+            return {"ingested": 0, "detail": "No valid profiles found"}
         summary = upsert_assets(profiles)
         return {"ingested": len(profiles), **summary, "disclaimer": DISCLAIMER_LINK}
+    except RuntimeError as e:
+        raise HTTPException(status_code=501, detail=str(e))
     except Exception as e:
         print("[/ingest/finnhub] ERROR:", type(e).__name__, str(e))
         raise HTTPException(status_code=500, detail="Ingest failed")
