@@ -151,13 +151,13 @@ def asset_details(
 ):
     try:
         drv = get_driver()
+        #Added to return all props from asset node
         cypher = """
         MATCH (a:Asset)-[:IN_SECTOR]->(s:Sector)
         WHERE toUpper(a.ticker) = toUpper($ticker)
-        RETURN a.ticker AS ticker,
-               coalesce(a.name, a.ticker) AS name,
-               coalesce(s.name, 'Unknown') AS sector
-        LIMIT 1
+        OPTIONAL MATCH (a)-[:IN_SECTOR]->(s:Sector)
+        WITH a, collect(DISTINCT s.name) AS sectors
+        RETURN a{ .*, sectors: sectors }
         """
         with drv.session() as s:
             record = s.run(cypher, ticker=ticker).single()
