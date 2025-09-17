@@ -16,13 +16,6 @@ app = FastAPI(title="AI-Driven Investment Advisor (Educational)")
 #--------------------------------------- Startup Events ----------------------------------------
 
 
-@app.on_event("startup")
-def _startup_check():
-    # Ensures env vars exist and driver can connect
-    drv = get_driver()
-    with drv.session() as s:
-        s.run("RETURN 1")
-
 @app.on_event("/startup")
 def _startup_check():
     drv = get_driver()
