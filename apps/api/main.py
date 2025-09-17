@@ -123,7 +123,7 @@ def search(
             cypher = """
             MATCH (a:Asset)-[:IN_SECTOR]->(s:Sector)
             WHERE toUpper(a.ticker) STARTS WITH toUpper($q)
-               OR toUpper(a.name)   STARTS WITH toUpper($q)
+            OR toUpper(coalesce(a.name, '')) STARTS WITH toUpper($q)
             RETURN a.ticker AS ticker,
                    coalesce(a.name, a.ticker) AS name,
                    coalesce(s.name, 'Unknown') AS sector
