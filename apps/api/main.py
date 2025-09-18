@@ -188,6 +188,60 @@ def ingest_finnhub(
         print("[/ingest/finnhub] ERROR:", type(e).__name__, str(e))
         raise HTTPException(status_code=500, detail="Ingest failed")
 
+@app.get("/analyze/fundamentals")
+def analyze_fundamentals(ticker: str = Query(..., min_length=1)):
+    cypher = """
+    MATCH (a:Asset)
+    WHERE toUpper(a.ticker) = toUpper($ticker)
+    OPTIONAL MATCH (a)-[:IN_SECTOR]->(s:Sector)
+    WITH a, collect(DISTINCT s.name) AS sectors
+    RETURN a{ .*, sectors: sectors } AS item
+    """
+    drv = get_driver()
+    with drv.session() as s:
+        record = s.run(cypher, ticker=ticker).single()
+    if not record:
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+    item = record["item"]
+
+    pe = item.get("pe")
+    mcap = item.get("marketCap") or item.get("marketcap")
+    sector = (item.get("sectors") or ["Unknown"])[0]
+
+    analysis = []
+    if pe is not None:
+        if pe < 10:
+            analysis.append(f"The P/E ratio of {pe} suggests the stock may be undervalued.")
+        elif pe > 25:
+            analysis.append(f"The P/E ratio of {pe} indicates the stock may be overvalued.")
+        else:
+            analysis.append(f"The P/E ratio of {pe} is within a normal range.")
+    else:
+        analysis.append("P/E ratio data is not available.")
+
+    if mcap is not None:
+        if mcap < 300_000_000:
+            analysis.append(f"The market cap of ${mcap:,.0f} classifies it as a small-cap stock, which may have higher growth potential but also higher risk.")
+        elif mcap < 2_000_000_000:
+            analysis.append(f"The market cap of ${mcap:,.0f} classifies it as a mid-cap stock, balancing growth potential and stability.")
+        else:
+            analysis.append(f"The market cap of ${mcap:,.0f} classifies it as a large-cap stock, which tends to be more stable but with potentially lower growth.")
+    else:
+        analysis.append("Market capitalization data is not available.")
+
+    analysis.append(f"The stock operates in the {sector} sector.")
+
+    return {
+        "ticker": item.get("ticker"),
+        "name": item.get("name"),
+        "sector": sector,
+        "pe": pe,
+        "marketCap": mcap,
+        "analysis": analysis,
+        "disclaimer": DISCLAIMER_LINK,
+    }
+
 #--------------------------------------- API Endpoints POST  ----------------------------------------
 @app.api_route("/advice", methods=["GET", "POST"])
 def advice(_: dict | None = Body(None)):
