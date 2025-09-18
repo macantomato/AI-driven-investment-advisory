@@ -242,7 +242,7 @@ def analyze_fundamentals(ticker: str = Query(..., min_length=1)):
         "disclaimer": DISCLAIMER_LINK,
     }
 
-@app.get("/finnhub/recommendation")
+@app.get("/finnhub/recommendation/{ticker}")
 def finnhub_recommendation(ticker: str = Query(..., min_length=1, description="Ticker symbol, AAPL")):
     from providers.finnhub import fetch_finnhub_recommendation
     try:
