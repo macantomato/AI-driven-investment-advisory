@@ -25,6 +25,11 @@ export default {
       const ticker = encodeURIComponent(path.slice(7));
       return fetch(`${API_BASE}/asset/${ticker}`, { headers: { "cache-control": "no-store" } });
     }
+    if (path === "/ingest/finnhub" && request.method === "GET") {
+      return fetch(`${API_BASE}${url.pathname}${url.search}`, {
+        headers: { "cache-control": "no-store" },
+    });
+}
 
     // Serve static assets from /public via assets binding
     return env.ASSETS.fetch(request);

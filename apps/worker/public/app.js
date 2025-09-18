@@ -30,6 +30,27 @@ document.getElementById("btnAsset").onclick = async () => {
     catch (e) { show({ error: String(e) }); }
 };
 
+document.getElementById("btnIngestFinnhub").onclick = async () => {
+    const raw = document.getElementById("ingestFinnhubTickers").value || "";
+    const array = Array.from(new Set(raw.split(/[,\s]+/).filter(Boolean)))
+                   .slice(0, 50)
+                   .map(s => s.toUpperCase());
+  if (!array.length) {
+    show({ error: "Enter 1–50 tickers (comma or space separated)" });
+    return;
+  }
+  // reapeated tickers
+  const qs = array.map(t => `tickers=${encodeURIComponent(t)}`).join("&");
+
+  show({ loading: `/ingest/finnhub?${qs}` });
+  try {
+    const data = await fetchJson(`/ingest/finnhub?${qs}`);
+    show(data); 
+  } catch (e) {
+    show({ error: String(e) });
+  }
+};
+
 
 
 document.getElementById("btnAdvice").onclick = async () => {

@@ -1,4 +1,4 @@
-import os, httpx
+import os
 import finnhub
 
 API_BASE = "https://finnhub.io/api/v1"
