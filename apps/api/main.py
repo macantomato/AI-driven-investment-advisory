@@ -242,6 +242,18 @@ def analyze_fundamentals(ticker: str = Query(..., min_length=1)):
         "disclaimer": DISCLAIMER_LINK,
     }
 
+@app.get("/finnhub/recommendation")
+def finnhub_recommendation(ticker: str = Query(..., min_length=1, description="Ticker symbol, AAPL")):
+    from providers.finnhub import fetch_finnhub_recommendation
+    try:
+        record = fetch_finnhub_recommendation(ticker)
+        if not record:
+            raise HTTPException(status_code=404, detail="No recommendation, or invalid ticker")
+        return {"ticker": ticker.strip().upper(), "recommendations": record}
+    except Exception as e:
+        print("[/finnhub/recommendation] ERROR:", type(e).__name__, str(e))
+        raise HTTPException(status_code=500, detail="Fetch failed")
+    
 #--------------------------------------- API Endpoints POST  ----------------------------------------
 @app.api_route("/advice", methods=["GET", "POST"])
 def advice(_: dict | None = Body(None)):

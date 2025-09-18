@@ -9,6 +9,15 @@ if not FINNHUB_API_KEY:
 finnhub_client = finnhub.Client(api_key=FINNHUB_API_KEY)
 
 
+def fetch_finnhub_recommendation(ticker: str) -> dict:
+    if not ticker:
+        return {}
+    try:
+        record = finnhub_client.recommendation_trends(symbol=ticker.strip())
+        return record if record else {}
+    except Exception:
+        return {}
+
 def fetch_profiles(tickers: list[str]) -> list[dict]:
     if not tickers:
         return []

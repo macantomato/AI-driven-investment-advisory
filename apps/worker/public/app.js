@@ -51,7 +51,11 @@ document.getElementById("btnIngestFinnhub").onclick = async () => {
   }
 };
 
-
+document.getElementById("btnFinnhubRec").onclick = async () => {
+    const t = document.getElementById("finnhubTicker").value;
+    const out = document.getElementById("finnOut");
+    out.textContent = JSON.stringify({ loading: `/finnhub/recommendation/${t}` }, null, 2);
+}
 
 document.getElementById("btnAdvice").onclick = async () => {
   show({ loading: "/advice" });
