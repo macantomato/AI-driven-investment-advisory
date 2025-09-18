@@ -51,11 +51,23 @@ document.getElementById("btnIngestFinnhub").onclick = async () => {
   }
 };
 
+// public/app.js
 document.getElementById("btnFinnhubRec").onclick = async () => {
-    const t = document.getElementById("finnhubTicker").value;
-    const out = document.getElementById("finnOut");
-    out.textContent = JSON.stringify({ loading: `/finnhub/recommendation/${t}` }, null, 2);
-}
+  const t = document.getElementById("finnhubTicker").value.trim();
+  const out = document.getElementById("finnOut");
+  out.textContent = JSON.stringify({ loading: `/finnhub/recommendation/${t}` }, null, 2);
+
+  try {
+    const res = await fetch(`/finnhub/recommendation/${encodeURIComponent(t)}`, {
+      cache: "no-store",
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || res.statusText);
+    out.textContent = JSON.stringify(data, null, 2);
+  } catch (err) {
+    out.textContent = JSON.stringify({ error: String(err) }, null, 2);
+  }
+};
 
 document.getElementById("btnAdvice").onclick = async () => {
   show({ loading: "/advice" });
