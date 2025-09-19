@@ -29,6 +29,9 @@ export default {
         headers: { "cache-control": "no-store" },
     });
     }
+    if (path === "/analyze/fundamentals" && request.method === "GET") {
+      return fetch(`${API_BASE}${url.pathname}${url.search}`, { headers: { "cache-control": "no-store" } });
+    }
     if (path.startsWith("/asset/") && request.method === "GET") {
       const ticker = encodeURIComponent(path.slice(7));
       return fetch(`${API_BASE}/asset/${ticker}`, { headers: { "cache-control": "no-store" } });
