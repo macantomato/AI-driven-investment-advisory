@@ -21,6 +21,9 @@ export default {
         body,
       });
     }
+    if (request.method === "GET" && url.pathname.startsWith("/finnhub/news")) {
+      return fetch(`${API_BASE}${url.pathname}${url.search}`, { headers: { "cache-control": "no-store" } });
+    }
     if (request.method === "GET" && url.pathname.startsWith("/finnhub/recommendation")) {
       return fetch(`${API_BASE}${url.pathname}${url.search}`, {
         headers: { "cache-control": "no-store" },

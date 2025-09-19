@@ -32,6 +32,22 @@
             <button id="btnFinnhubRec">Get Recommendation</button>
             <pre id="finnOut" class="panel"></pre>
         </div>
+
+        <div class="container">
+            <label style="margin-left:.5rem;">
+            <input id="includeMetrics" type="checkbox" /> include metrics
+            </label>
+
+            <input id="fundTicker" placeholder="Ticker for fundamentals (e.g., AAPL)" />
+            <button id="btnFund">Analyze fundamentals</button>
+            <pre id="fundOut" class="panel"></pre>
+
+            <!-- Company news -->
+            <input id="newsTicker" placeholder="Ticker for news (e.g., AAPL)" />
+            <input id="newsDays" type="number" value="30" min="1" max="365" />
+            <button id="btnNews">Get News</button>
+            <pre id="newsOut" class="panel"></pre>
+        </div>
     </main>
     <script src="/app.js" defer></script>
   </body>

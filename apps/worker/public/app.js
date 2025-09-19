@@ -31,43 +31,73 @@ document.getElementById("btnAsset").onclick = async () => {
 };
 
 document.getElementById("btnIngestFinnhub").onclick = async () => {
-    const raw = document.getElementById("ingestFinnhubTickers").value || "";
-    const array = Array.from(new Set(raw.split(/[,\s]+/).filter(Boolean)))
-                   .slice(0, 50)
-                   .map(s => s.toUpperCase());
+  const raw = document.getElementById("ingestFinnhubTickers").value || "";
+  const array = Array.from(new Set(raw.split(/[,\s]+/).filter(Boolean)))
+    .slice(0, 50)
+    .map(s => s.toUpperCase());
   if (!array.length) {
     show({ error: "Enter 1–50 tickers (comma or space separated)" });
     return;
   }
-  // reapeated tickers
-  const qs = array.map(t => `tickers=${encodeURIComponent(t)}`).join("&");
+  const qsTickers = array.map(t => `tickers=${encodeURIComponent(t)}`).join("&");
+  const include = document.getElementById("includeMetrics").checked ? "&include=metrics" : "";
 
-  show({ loading: `/ingest/finnhub?${qs}` });
+  show({ loading: `/ingest/finnhub?${qsTickers}${include}` });
   try {
-    const data = await fetchJson(`/ingest/finnhub?${qs}`);
-    show(data); 
+    const data = await fetchJson(`/ingest/finnhub?${qsTickers}${include}`);
+    show(data);
   } catch (e) {
     show({ error: String(e) });
   }
 };
 
-// public/app.js
 document.getElementById("btnFinnhubRec").onclick = async () => {
   const t = document.getElementById("finnhubTicker").value.trim();
-  const out = document.getElementById("finnOut");
-  out.textContent = JSON.stringify({ loading: `/finnhub/recommendation/${t}` }, null, 2);
+  const recOut = document.getElementById("finnOut");
+  recOut.textContent = JSON.stringify({ loading: `/finnhub/recommendation/${t}` }, null, 2);
 
   try {
-    const res = await fetch(`/finnhub/recommendation/${encodeURIComponent(t)}`, {
-      cache: "no-store",
-    });
+    const res = await fetch(`/finnhub/recommendation/${encodeURIComponent(t)}`, { cache: "no-store" });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || res.statusText);
-    out.textContent = JSON.stringify(data, null, 2);
+    recOut.textContent = JSON.stringify(data, null, 2);
   } catch (err) {
-    out.textContent = JSON.stringify({ error: String(err) }, null, 2);
+    recOut.textContent = JSON.stringify({ error: String(err) }, null, 2);
   }
 };
+
+document.getElementById("btnFund").onclick = async () => {
+  const t = (document.getElementById("fundTicker").value || "").trim();
+  const fundOut = document.getElementById("fundOut");
+  if (!t) { fundOut.textContent = JSON.stringify({ error: "Enter a ticker" }, null, 2); return; }
+
+  fundOut.textContent = JSON.stringify({ loading: `/analyze/fundamentals?ticker=${t}` }, null, 2);
+  try {
+    const data = await fetchJson(`/analyze/fundamentals?ticker=${encodeURIComponent(t)}`);
+    fundOut.textContent = JSON.stringify(data, null, 2);
+  } catch (e) {
+    fundOut.textContent = JSON.stringify({ error: String(e) }, null, 2);
+  }
+};
+
+document.getElementById("btnNews").onclick = async () => {
+  const t = (document.getElementById("newsTicker").value || "").trim();
+  const d = Number(document.getElementById("newsDays").value || 30);
+  const newsOut = document.getElementById("newsOut");
+
+  if (!t) { newsOut.textContent = JSON.stringify({ error: "Enter a ticker" }, null, 2); return; }
+  newsOut.textContent = JSON.stringify({ loading: `/finnhub/news/${t}?days=${d}` }, null, 2);
+
+  try {
+    const res = await fetch(`/finnhub/news/${encodeURIComponent(t)}?days=${encodeURIComponent(d)}`, { cache: "no-store" });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || res.statusText);
+    newsOut.textContent = JSON.stringify(data, null, 2);
+  } catch (err) {
+    newsOut.textContent = JSON.stringify({ error: String(err) }, null, 2);
+  }
+};
+
 
 document.getElementById("btnAdvice").onclick = async () => {
   show({ loading: "/advice" });

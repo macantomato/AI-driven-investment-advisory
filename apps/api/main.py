@@ -153,11 +153,11 @@ def asset_details(
         drv = get_driver()
         #Added to return all props from asset node
         cypher = """
-        MATCH (a:Asset)-[:IN_SECTOR]->(s:Sector)
+        MATCH (a:Asset)
         WHERE toUpper(a.ticker) = toUpper($ticker)
         OPTIONAL MATCH (a)-[:IN_SECTOR]->(s:Sector)
         WITH a, collect(DISTINCT s.name) AS sectors
-        RETURN a{ .*, sectors: sectors }
+        RETURN a{ .*, sectors: sectors } AS item
         """
         with drv.session() as s:
             record = s.run(cypher, ticker=ticker).single()
@@ -172,21 +172,33 @@ def asset_details(
 
 @app.get("/ingest/finnhub")
 def ingest_finnhub(
-    tickers: List[str] = Query(..., min_items = 1, max_items = 50,  description="List of tickers/symbols to fetch and ingest (max 50)"),
+    tickers: List[str] = Query(..., min_items=1, max_items=50, description="Repeat ?tickers=AAPL&tickers=MSFT"),
+    include: Optional[str] = Query(None, description="comma list: metrics")
 ):
     if len(tickers) > 50:
         raise HTTPException(status_code=400, detail="Max 50 tickers allowed")
     try:
-        profiles = fetch_profiles(tickers)
-        if not profiles:
-            return {"ingested": 0, "detail": "No valid profiles found"}
-        summary = upsert_assets(profiles)
-        return {"ingested": len(profiles), **summary, "disclaimer": DISCLAIMER_LINK}
+        from providers.finnhub import fetch_basic_financials
+        rows = fetch_profiles(tickers)
+        if not rows:
+            return {"received": 0, "created_count": 0, "updated_count": 0,
+                    "created_tickers": [], "updated_tickers": [], "disclaimer": DISCLAIMER_LINK}
+
+        include_set = {s.strip().lower() for s in (include.split(",") if include else [])}
+
+        if "metrics" in include_set:
+            metrics = fetch_basic_financials([r["ticker"] for r in rows])
+            for r in rows:
+                r["props"].update(metrics.get(r["ticker"], {}))
+
+        summary = upsert_assets(rows)
+        return {"received": len(rows), **summary, "disclaimer": DISCLAIMER_LINK}
     except RuntimeError as e:
         raise HTTPException(status_code=501, detail=str(e))
     except Exception as e:
         print("[/ingest/finnhub] ERROR:", type(e).__name__, str(e))
         raise HTTPException(status_code=500, detail="Ingest failed")
+
 
 @app.get("/analyze/fundamentals")
 def analyze_fundamentals(ticker: str = Query(..., min_length=1)):
@@ -258,6 +270,19 @@ def finnhub_recommendation(ticker: str = Path(..., min_length=1, description="Ti
 
     return {"ticker": symbol, "recommendations": record}
     
+@app.get("/finnhub/news/{ticker}")
+def finnhub_news(
+    ticker: str = Path(..., min_length=1, description="Ticker (e.g., AAPL)"),
+    days: int = Query(30, ge=1, le=365),
+    limit: int = Query(20, ge=1, le=200)
+):
+    try:
+        from providers.finnhub import fetch_company_news
+        items = fetch_company_news(ticker, days=days, limit=limit)
+        return {"ticker": ticker.upper(), "count": len(items), "items": items}
+    except Exception as e:
+        print("[/finnhub/news] ERROR:", type(e).__name__, str(e))
+        raise HTTPException(status_code=500, detail="Fetch failed")
 #--------------------------------------- API Endpoints POST  ----------------------------------------
 @app.api_route("/advice", methods=["GET", "POST"])
 def advice(_: dict | None = Body(None)):
