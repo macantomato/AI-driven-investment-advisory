@@ -68,14 +68,17 @@ def fetch_profiles(tickers: list[str]) -> list[dict]:
         name = (profile.get("name") or sym).strip()
         sector = (profile.get("finnhubIndustry") or "Unknown").strip()
 
+        # finnhub returns marketcap and shareout in millions, convert to real numbers in props
+        raw_mcap = _num(profile.get("marketCapitalization"))
+        raw_so = _num(profile.get("shareOutstanding"))
         # extra props from profile
         props = {
             "exchange": profile.get("exchange"),
             "country": profile.get("country"),
             "currency": profile.get("currency"),
             "ipo": profile.get("ipo"),
-            "marketCap": profile.get("marketCapitalization"),
-            "sharesOutstanding": profile.get("shareOutstanding"),
+            "marketCap": raw_mcap * 1_000_000 if raw_mcap is not None else None,
+            "sharesOutstanding": raw_so * 1_000_000 if raw_so is not None else None,
             "weburl": profile.get("weburl"),
         }
 
