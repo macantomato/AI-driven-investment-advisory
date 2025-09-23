@@ -283,6 +283,12 @@ def finnhub_news(
     except Exception as e:
         print("[/finnhub/news] ERROR:", type(e).__name__, str(e))
         raise HTTPException(status_code=500, detail="Fetch failed")
+    
+# wrapper for single ticker ingest with finnhub
+# @app.get("/ingest/ticker/{ticker}")
+# def ingest_ticker(ticker: str):
+#     return ingest_finnhub(tickers=[ticker], include="metrics")
+
 #--------------------------------------- API Endpoints POST  ----------------------------------------
 @app.api_route("/advice", methods=["GET", "POST"])
 def advice(_: dict | None = Body(None)):
@@ -345,7 +351,8 @@ def ingest_assets(payload: List[IngestAsset] = Body(...)):
         print("[/ingest/assets] ERROR:", type(e).__name__, str(e))
         raise HTTPException(status_code=500, detail="Ingest failed")
 
-
+@app.post("/analyze/valuation_llm")
+def analyze_valuation_llm(ticker: List[str] = Body(..., min_items=1, max_items=5)):
 #--------------------------------------- Query/Cypher funcs ----------------------------------------
 
 # def list_assets_with_sectors() -> list[dict]:
@@ -387,6 +394,7 @@ def upsert_assets(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
 
     WITH a, coalesce(row.props, {}) AS p, (a._new IS NOT NULL) AS isNew
     SET a += p
+    SET a.updatedAt = datetime(), a.updatedAtMs = timestamp()
     REMOVE a._new
 
     RETURN
