@@ -112,3 +112,32 @@ document.getElementById("btnAdvice").onclick = async () => {
   } catch (e) { show({ error: String(e) }); }
 };
 
+document.getElementById("btnFundV1").onclick = async () => {
+  const t = document.getElementById("assetTicker").value.trim();
+  try { show(await fetchJson(`/analyze/fundamentals_v1?ticker=${encodeURIComponent(t)}`)); }
+  catch (e) { show({ error: String(e) }); }
+};
+
+document.getElementById("btnNews").onclick = async () => {
+  const t = document.getElementById("assetTicker").value.trim();
+  try { show(await fetchJson(`/analyze/news?ticker=${encodeURIComponent(t)}&days=30&limit=8`)); }
+  catch (e) { show({ error: String(e) }); }
+};
+
+document.getElementById("btnStreet").onclick = async () => {
+  const t = document.getElementById("assetTicker").value.trim();
+  try { show(await fetchJson(`/analyze/street?ticker=${encodeURIComponent(t)}`)); }
+  catch (e) { show({ error: String(e) }); }
+};
+
+document.getElementById("btnAdviceV1").onclick = async () => {
+  const raw = document.getElementById("ingestFinnhubTickers").value || "";
+  const arr = Array.from(new Set(raw.split(/[,\s]+/).filter(Boolean))).slice(0,10).map(s=>s.toUpperCase());
+  try {
+    show(await fetchJson("/advice/v1", {
+      method:"POST", headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ tickers: arr.length ? arr : ["AAPL","MSFT","JNJ"], risk: 3 })
+    }));
+  } catch (e) { show({ error: String(e) }); }
+};
+

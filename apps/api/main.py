@@ -450,5 +450,249 @@ def llm_explain(tickers: list[str], risk: int) -> str | None:
     except Exception:
         return None
     
+   #--------------------------------------- Helpers for analyzers  ----------------------------------------
+def _get_asset_item(ticker: str) -> dict | None:
+    """Return a{ .*, sectors: [...] } from Neo4j or None."""
+    drv = get_driver()
+    cypher = """
+    MATCH (a:Asset)
+    WHERE toUpper(a.ticker) = toUpper($ticker)
+    OPTIONAL MATCH (a)-[:IN_SECTOR]->(s:Sector)
+    WITH a, collect(DISTINCT s.name) AS sectors
+    RETURN a{ .*, sectors: sectors } AS item
+    """
+    with drv.session() as s:
+        rec = s.run(cypher, ticker=ticker).single()
+    return rec["item"] if rec else None
+
+
+def _num(v, default=None):
+    try:
+        if v is None:
+            return default
+        f = float(v)
+        return f
+    except Exception:
+        return default
+
+
+def _fmt_money(x: float | None) -> str:
+    if x is None:
+        return "n/a"
+    absx = abs(x)
+    if absx >= 1e12: return f"${x/1e12:.2f}T"
+    if absx >= 1e9:  return f"${x/1e9:.2f}B"
+    if absx >= 1e6:  return f"${x/1e6:.2f}M"
+    if absx >= 1e3:  return f"${x/1e3:.2f}K"
+    return f"${x:,.0f}"
+    
+@app.get("/analyze/fundamentals_v1")
+def analyze_fundamentals_v1(ticker: str = Query(..., min_length=1)):
+    item = _get_asset_item(ticker)
+    if not item:
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+    pe   = _num(item.get("pe"))
+    pb   = _num(item.get("pb"))
+    ps   = _num(item.get("ps"))
+    roe  = _num(item.get("roe"))
+    roa  = _num(item.get("roa"))
+    gm   = _num(item.get("grossMarginTTM"))
+    om   = _num(item.get("operatingMarginTTM"))
+    nm   = _num(item.get("netMarginTTM"))
+    dte  = _num(item.get("debtToEquity"))
+    cr   = _num(item.get("currentRatio"))
+    qr   = _num(item.get("quickRatio"))
+    beta = _num(item.get("beta"))
+    dy   = _num(item.get("dividendYieldTTM"))  
+    mcap = _num(item.get("marketCap"))
+
+    score = 50
+    notes = []
+
+    if pe is not None:
+        if pe < 12:  score += 6;  notes.append(f"P/E {pe:.1f} looks inexpensive.")
+        elif pe > 30: score -= 6; notes.append(f"P/E {pe:.1f} looks rich.")
+        else: notes.append(f"P/E {pe:.1f} is moderate.")
+
+    if pb is not None and pb > 6: score -= 3
+    if ps is not None and ps > 12: score -= 3
+
+    if roe is not None:
+        if roe >= 15: score += 6; notes.append(f"ROE {roe:.1f}% is strong.")
+        elif roe < 5: score -= 4; notes.append(f"ROE {roe:.1f}% is low.")
+
+    if gm is not None and gm >= 50: score += 3
+    if om is not None and om >= 20: score += 2
+    if nm is not None and nm >= 15: score += 2
+
+    if dte is not None:
+        if dte > 2.0: score -= 5; notes.append(f"Debt/Equity {dte:.2f} is high.")
+        elif dte < 0.5: score += 3
+
+    if cr is not None and cr < 1.0: score -= 3
+    if qr is not None and qr < 0.8: score -= 2
+
+    if beta is not None:
+        if beta > 1.4: score -= 3
+        elif beta < 0.8: score += 2
+
+    if dy is not None and dy >= 0.02: score += 2  # ≥2% div yield
+
+    score = max(0, min(100, score))
+
+    return {
+        "ticker": item.get("ticker"),
+        "name": item.get("name"),
+        "sector": (item.get("sectors") or ["Unknown"])[0],
+        "metrics": {
+            "pe": pe, "pb": pb, "ps": ps,
+            "roe": roe, "roa": roa,
+            "grossMarginTTM": gm, "operatingMarginTTM": om, "netMarginTTM": nm,
+            "debtToEquity": dte, "currentRatio": cr, "quickRatio": qr,
+            "beta": beta, "dividendYieldTTM": dy,
+            "marketCap": mcap, "marketCapPretty": _fmt_money(mcap),
+        },
+        "score": score,
+        "notes": notes,
+        "disclaimer": DISCLAIMER_LINK,
+    }
+
+@app.get("/analyze/news")
+def analyze_news(
+    ticker: str = Query(..., min_length=1),
+    days: int = Query(30, ge=1, le=365),
+    limit: int = Query(10, ge=3, le=30),
+):
+    from providers.finnhub import fetch_company_news
+    items = fetch_company_news(ticker, days=days, limit=limit)
+    headlines = [f"- {it.get('headline','')}" for it in items][:limit]
+
+    client = get_llm()
+    summary = ""
+    sentiment = 0.0
+    bullets = []
+    risks = []
+    if client and headlines:
+        try:
+            prompt = (
+                "Summarize these recent headlines in 3-5 sentences, "
+                "then provide 3 bullet positives and 3 bullet risks. "
+                "Finally, return an overall sentiment from -1 (bearish) to +1 (bullish).\n\n"
+                + "\n".join(headlines)
+            )
+            resp = client.chat.completions.create(
+                model="meta-llama/llama-4-scout-17b-16e-instruct",
+                temperature=0.2, max_tokens=350, timeout=20,
+                messages=[
+                    {"role":"system","content":"Be concise, neutral and factual."},
+                    {"role":"user","content":prompt}
+                ]
+            )
+            text = (resp.choices[0].message.content or "").strip()
+            summary = text
+        except Exception:
+            pass
+
+    return {
+        "ticker": ticker.upper(),
+        "count": len(items),
+        "headlines": items,   
+        "summary": summary or "No LLM summary available.",
+        "sentiment": sentiment,
+        "disclaimer": DISCLAIMER_LINK,
+    }
+
+@app.get("/analyze/street")
+def analyze_street(ticker: str = Query(..., min_length=1)):
+    from providers.finnhub import fetch_finnhub_recommendation
+    rows = fetch_finnhub_recommendation(ticker) or []
+
+    latest = rows[0] if rows else {}
+    counts = {
+        "strongBuy": int(latest.get("strongBuy", 0) or 0),
+        "buy": int(latest.get("buy", 0) or 0),
+        "hold": int(latest.get("hold", 0) or 0),
+        "sell": int(latest.get("sell", 0) or 0),
+        "strongSell": int(latest.get("strongSell", 0) or 0),
+        "period": latest.get("period"),
+    }
+    total = sum(counts[k] for k in ("strongBuy","buy","hold","sell","strongSell"))
+    bias = (counts["strongBuy"] + counts["buy"]) - (counts["sell"] + counts["strongSell"])
+
+    stance = "mixed"
+    if total > 0:
+        if bias >= total * 0.2: stance = "bullish"
+        elif bias <= -total * 0.2: stance = "bearish"
+
+    return {
+        "ticker": ticker.upper(),
+        "latest": counts,
+        "total_analysts": total,
+        "stance": stance,
+        "history": rows, 
+        "disclaimer": DISCLAIMER_LINK,
+    }
+
+class AdviceV1Request(BaseModel):
+    tickers: List[str] = Field(min_items=1, max_items=10)
+    risk: int = Field(3, ge=1, le=5)
+
+@app.post("/advice/v1")
+def advice_v1(body: AdviceV1Request):
+    tickers = [t.strip().upper() for t in body.tickers if t and t.strip()]
+    tickers = list(dict.fromkeys(tickers))[:10]
+
+    per = []
+    for t in tickers:
+        fundamentals = analyze_fundamentals_v1.__wrapped__(ticker=t)  # call handler logic
+        street = analyze_street.__wrapped__(ticker=t)
+        news = analyze_news.__wrapped__(ticker=t, days=14, limit=5)
+        per.append({"ticker": t, "fundamentals": fundamentals, "street": street, "news": news})
+
+    client = get_llm()
+    rationale = "LLM not configured."
+    allocation = {t: round(1/len(tickers), 4) for t in tickers} if tickers else {}
+
+    if client:
+        try:
+            lines = []
+            for p in per:
+                f = p["fundamentals"]; s = p["street"]; n = p["news"]
+                lines.append(
+                    f"{p['ticker']}: score={f.get('score')}, "
+                    f"pe={f['metrics'].get('pe')}, roe={f['metrics'].get('roe')}, "
+                    f"dte={f['metrics'].get('debtToEquity')}, beta={f['metrics'].get('beta')}, "
+                    f"street={s.get('stance')} ({s.get('total_analysts')} analysts), "
+                    f"news_count={n.get('count')}"
+                )
+            prompt = (
+                "You're an educational investment assistant. Given risk level "
+                f"{body.risk} (1=conservative, 5=aggressive) and the following per-ticker summaries,\n"
+                "1) suggest a simple diversified allocation (weights summing to 100%),\n"
+                "2) give a brief rationale (120-180 words),\n"
+                "3) include 2 risks to monitor.\n"
+                "Do not give financial advice; be educational and generic.\n\n"
+                + "\n".join(lines)
+            )
+            resp = client.chat.completions.create(
+                model="meta-llama/llama-4-scout-17b-16e-instruct",
+                temperature=0.2, max_tokens=400, timeout=25,
+                messages=[{"role":"system","content":"Be concise, educational, balanced."},
+                          {"role":"user","content":prompt}]
+            )
+            rationale = (resp.choices[0].message.content or "").strip()
+
+        except Exception:
+            pass
+
+    return {
+        "risk": body.risk,
+        "tickers": tickers,
+        "per_ticker": per,
+        "allocation": allocation, 
+        "rationale": rationale,
+        "disclaimer": DISCLAIMER_LINK,
+    }
 
 

@@ -29,6 +29,20 @@ export default {
         headers: { "cache-control": "no-store" },
     });
     }
+    if (path.startsWith("/analyze/fundamentals_v1") && request.method === "GET") {
+  const qs = url.search; // includes ?ticker=...
+  return fetch(`${API_BASE}/analyze/fundamentals_v1${qs}`, { headers: { "cache-control": "no-store" } });
+    }
+    if (path.startsWith("/analyze/news") && request.method === "GET") {
+      return fetch(`${API_BASE}/analyze/news${url.search}`, { headers: { "cache-control": "no-store" } });
+    }
+    if (path.startsWith("/analyze/street") && request.method === "GET") {
+      return fetch(`${API_BASE}/analyze/street${url.search}`, { headers: { "cache-control": "no-store" } });
+    }
+    if (path === "/advice/v1" && request.method === "POST") {
+      const body = await request.text();
+      return fetch(`${API_BASE}/advice/v1`, { method: "POST", headers: { "content-type":"application/json" }, body });
+    }
     if (path === "/analyze/fundamentals" && request.method === "GET") {
       return fetch(`${API_BASE}${url.pathname}${url.search}`, { headers: { "cache-control": "no-store" } });
     }
