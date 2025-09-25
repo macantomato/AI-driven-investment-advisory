@@ -603,6 +603,70 @@ def analyze_news(
         "disclaimer": DISCLAIMER_LINK,
     }
 
+
+@app.post("/analyze/news_refine")
+def analyze_news_refine(payload: dict = Body(...)) -> Dict[str, Any]:
+    error_detail = "Provide non-empty 'headlines' list."
+    headlines_raw = payload.get("headlines")
+    if not isinstance(headlines_raw, list) or not headlines_raw:
+        raise HTTPException(status_code=400, detail=error_detail)
+
+    cleaned: List[str] = []
+    for entry in headlines_raw:
+        if not isinstance(entry, str):
+            raise HTTPException(status_code=400, detail=error_detail)
+        trimmed = entry.strip()
+        if trimmed:
+            cleaned.append(trimmed)
+    if not cleaned:
+        raise HTTPException(status_code=400, detail=error_detail)
+
+    ticker = (payload.get("ticker") or "").strip().upper()
+    client = get_llm()
+    if not client:
+        return {
+            "ticker": ticker or None,
+            "summary": "LLM not configured.",
+            "disclaimer": DISCLAIMER_LINK,
+        }
+
+    company_label = ticker or "the company"
+    prompt_lines = "\n".join(f"- {line}" for line in cleaned[:20])
+    prompt = (
+        f"Summarize these headlines for {company_label} in 3-5 sentences. "
+        "Then list 3 positives and 3 risks. "
+        "End with an overall sentiment scalar from -1 (bearish) to +1 (bullish).\n\n"
+        f"{prompt_lines}"
+    )
+
+    try:
+        resp = client.chat.completions.create(
+            model="meta-llama/llama-4-scout-17b-16e-instruct",
+            temperature=0.2,
+            max_tokens=350,
+            timeout=25,
+            messages=[
+                {"role": "system", "content": "Be concise, neutral, and educational."},
+                {"role": "user", "content": prompt},
+            ],
+        )
+        text_out = (resp.choices[0].message.content or "").strip()
+        if not text_out:
+            text_out = "Summarization failed."
+        result = {
+            "ticker": ticker or None,
+            "summary": text_out,
+            "disclaimer": DISCLAIMER_LINK,
+        }
+    except Exception:
+        result = {
+            "ticker": ticker or None,
+            "summary": "Summarization failed.",
+            "disclaimer": DISCLAIMER_LINK,
+        }
+    return result
+
+
 @app.get("/analyze/street")
 def analyze_street(ticker: str = Query(..., min_length=1)):
     from providers.finnhub import fetch_finnhub_recommendation
