@@ -7,74 +7,158 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <main class="container">
-      <h1>AI-Driven Investment Advisor (Educational)</h1>
-      <p class="muted"><strong>Disclaimer:</strong> Educational only</p>
+    <div class="background-glow background-glow--one"></div>
+    <div class="background-glow background-glow--two"></div>
+    <div class="page-shell">
+      <header class="hero">
+        <div class="hero-content">
+          <span class="badge">Educational Sandbox</span>
+          <h1>AI-Driven Investment Advisor</h1>
+          <p class="hero-copy">
+            Explore market data, run quick analyses, and generate educational portfolio insights.
+            Each tool below connects to the advisor API.
+          </p>
+          <div class="hero-actions">
+            <button id="btnHealth" class="primary">Check Service Health</button>
+            <button id="btnDb" class="ghost">Ping Database</button>
+          </div>
+        </div>
+        <div class="hero-visual">
+          <div class="hero-card">
+            <div class="hero-card__icon">🫸</div>
+            <div class="hero-card__content">
+              <p>Using live fundamentals surrounding ticker information</p>
+              <span class="hero-card__hint">Powered by: Neo4j, Finnhub, Groq LLM</span>
+            </div>
+          </div>
+        </div>
+      </header>
 
-      <section class="section">
-        <h2>System</h2>
-        <div class="actions">
-          <button id="btnHealth">Health</button>
-          <button id="btnDb">DB Ping</button>
-        </div>
-        <pre id="outHealth" class="panel"></pre>
-        <pre id="outDb" class="panel"></pre>
-      </section>
+      <main class="content">
+        <section class="cards-grid">
+          <article class="card">
+            <div class="card-header">
+              <span class="card-icon">🛎</span>
+              <div>
+                <h2>Service Monitor</h2>
+                <p>Confirm the API and database are ready before running deeper analysis.</p>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="result-block" id="resultHealth" aria-live="polite"></div>
+              <div class="result-block" id="resultDb" aria-live="polite"></div>
+            </div>
+          </article>
 
-      <section class="section">
-        <h2>Lookup &amp; Ingest</h2>
-        <div class="actions">
-          <input id="assetTicker" placeholder="Ticker (e.g., AAPL)" />
-          <button id="btnAsset">Get Asset</button>
-        </div>
-        <pre id="outAsset" class="panel"></pre>
-        <div class="actions">
-          <input id="ingestTickers" placeholder="Tickers (comma separated)" />
-          <label class="inline">
-            <input id="includeMetrics" type="checkbox" /> include metrics
-          </label>
-          <button id="btnIngest">Ingest Profiles</button>
-        </div>
-        <pre id="outIngest" class="panel"></pre>
-      </section>
+          <article class="card">
+            <div class="card-header">
+              <span class="card-icon">🔍</span>
+              <div>
+                <h2>Asset Lookup &amp; Ingest</h2>
+                <p>Pull company profiles, then enrich the current Neo4j database to get more information.</p>
+              </div>
+            </div>
+            <div class="card-body">
+              <label class="field">
+                <span>Ticker lookup</span>
+                <div class="field-group">
+                  <input id="assetTicker" placeholder="e.g., AAPL" aria-label="Ticker symbol" />
+                  <button id="btnAsset" class="secondary">Get Asset</button>
+                </div>
+              </label>
+              <div class="result-block" id="resultAsset" aria-live="polite"></div>
 
-      <section class="section">
-        <h2>Analyzers</h2>
-        <div class="actions">
-          <input id="anTicker" placeholder="Analyzer ticker (e.g., MSFT)" />
-          <button id="btnFund">Fundamentals v1</button>
-          <button id="btnStreet">Street View</button>
-        </div>
-        <pre id="outFund" class="panel"></pre>
-        <pre id="outStreet" class="panel"></pre>
-        <div class="actions">
-          <input id="newsTicker" placeholder="News ticker (e.g., NVDA)" />
-          <input id="newsDays" type="number" min="1" max="365" value="30" />
-          <input id="newsLimit" type="number" min="1" max="20" value="8" />
-          <button id="btnNewsLoad">Load News</button>
-        </div>
-        <div id="newsList" class="news-list"></div>
-        <div class="actions">
-          <button id="btnNewsSummarize">Summarize Selected Headlines</button>
-        </div>
-        <pre id="outNewsSummary" class="panel"></pre>
-      </section>
+              <label class="field">
+                <span>Bulk ingest</span>
+                <div class="field-group">
+                  <input id="ingestTickers" placeholder="AAPL, MSFT, NVDA" aria-label="Tickers to ingest" />
+                  <label class="checkbox">
+                    <input id="includeMetrics" type="checkbox" />
+                    <span>Include fundamentals</span>
+                  </label>
+                  <button id="btnIngest" class="secondary">Ingest Profiles</button>
+                </div>
+              </label>
+              <div class="result-block" id="resultIngest" aria-live="polite"></div>
+            </div>
+          </article>
 
-      <section class="section">
-        <h2>Master Advice</h2>
-        <div class="actions">
-          <input id="adviceTickers" placeholder="Tickers (comma separated)" />
-          <label class="inline">
-            Risk
-            <input id="adviceRisk" type="number" min="1" max="5" value="3" />
-          </label>
-          <button id="btnAdvice">Run Advice v1</button>
-        </div>
-        <pre id="outAdvice" class="panel"></pre>
-      </section>
+          <article class="card card--wide">
+            <div class="card-header">
+              <span class="card-icon">💹</span>
+              <div>
+                <h2>Market Analyzers</h2>
+                <p>Compare fundamentals, analyst sentiment, and curated headlines for any ticker.</p>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="field-row">
+                <label class="field field--compact">
+                  <span>Ticker</span>
+                  <input id="anTicker" placeholder="e.g., MSFT" aria-label="Analyzer ticker" />
+                </label>
+                <button id="btnFund" class="secondary">Fundamentals</button>
+                <button id="btnStreet" class="secondary">Street View</button>
+              </div>
 
-      <footer class="muted note">Requests may take a moment, especially on cold starts.</footer>
-    </main>
+              <div class="result-block" id="resultFund" aria-live="polite"></div>
+              <div class="result-block" id="resultStreet" aria-live="polite"></div>
+
+              <div class="news-tools">
+                <div class="field-row">
+                  <label class="field field--compact">
+                    <span>News ticker</span>
+                    <input id="newsTicker" placeholder="e.g., NVDA" aria-label="News ticker" />
+                  </label>
+                  <label class="field field--compact">
+                    <span>Days</span>
+                    <input id="newsDays" type="number" min="1" max="365" value="30" aria-label="Lookback days" />
+                  </label>
+                  <label class="field field--compact">
+                    <span>Limit</span>
+                    <input id="newsLimit" type="number" min="1" max="20" value="8" aria-label="Headline limit" />
+                  </label>
+                  <button id="btnNewsLoad" class="secondary">Load Headlines</button>
+                </div>
+
+                <div id="newsList" class="news-list" aria-live="polite"></div>
+                <button id="btnNewsSummarize" class="secondary news-summarize">Summarize Selected</button>
+                <div class="result-block" id="resultNews" aria-live="polite"></div>
+              </div>
+            </div>
+          </article>
+
+          <article class="card card--wide">
+            <div class="card-header">
+              <span class="card-icon">🏗</span>
+              <div>
+                <h2>Strategy Builder</h2>
+                <p>Create an educational allocation with LLM rationale tailored to a risk level.</p>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="field-row">
+                <label class="field field--compact">
+                  <span>Tickers</span>
+                  <input id="adviceTickers" placeholder="Separate with commas" aria-label="Advice tickers" />
+                </label>
+                <label class="field field--compact">
+                  <span>Risk (1-5)</span>
+                  <input id="adviceRisk" type="number" min="1" max="5" value="3" aria-label="Risk score" />
+                </label>
+                <button id="btnAdvice" class="primary">Run Advice</button>
+              </div>
+              <div class="result-block" id="resultAdvice" aria-live="polite"></div>
+            </div>
+          </article>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <p>Results are educational and depend on live data sources. Expect a short delay on cold starts.</p>
+      </footer>
+    </div>
+
     <script src="/app.js" defer></script>
   </body>
 </html>
