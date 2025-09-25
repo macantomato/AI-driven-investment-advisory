@@ -9,51 +9,71 @@
   <body>
     <main class="container">
       <h1>AI-Driven Investment Advisor (Educational)</h1>
-      <p class="muted"><strong>Disclaimer:</strong> Educational</p>
+      <p class="muted"><strong>Disclaimer:</strong> Educational only</p>
 
-      <div class="actions">
-        <button id="btnHealth">Health</button>
-        <button id="btnAdvice">Get Advice</button>
-        <button id="btnDbPing">DB Ping</button>
-        <input id="assetTicker" placeholder="Ticker, AAPL, or MSFT"/>
-        <button id="btnAsset">Get asset info</button>
-        <input id="ingestFinnhubTickers" placeholder="Follow this format: AAPL, MSFT, NVDA"/>
-        <button id="btnIngestFinnhub">Ingest with Finnhub</button>
-      </div>
-
-      <pre id="out" class="panel"></pre>
-
-      <footer class="muted">Request's may require some time, especially first time request. 
-        Since free tier render goes into sleep mode sometimes</footer>
-
-        <div class="container">
-            <p>Finnhub Recomendation's regarding choosen ticker</p>
-            <input id="finnhubTicker" placeholder="Ticker, AAPL etc"/>
-            <button id="btnFinnhubRec">Get Recommendation</button>
-            <pre id="finnOut" class="panel"></pre>
+      <section class="section">
+        <h2>System</h2>
+        <div class="actions">
+          <button id="btnHealth">Health</button>
+          <button id="btnDb">DB Ping</button>
         </div>
+        <pre id="outHealth" class="panel"></pre>
+        <pre id="outDb" class="panel"></pre>
+      </section>
 
-        <div class="container">
-            <label style="margin-left:.5rem;">
+      <section class="section">
+        <h2>Lookup &amp; Ingest</h2>
+        <div class="actions">
+          <input id="assetTicker" placeholder="Ticker (e.g., AAPL)" />
+          <button id="btnAsset">Get Asset</button>
+        </div>
+        <pre id="outAsset" class="panel"></pre>
+        <div class="actions">
+          <input id="ingestTickers" placeholder="Tickers (comma separated)" />
+          <label class="inline">
             <input id="includeMetrics" type="checkbox" /> include metrics
-            </label>
-
-            <input id="fundTicker" placeholder="Ticker for fundamentals (e.g., AAPL)" />
-            <button id="btnFund">Analyze fundamentals</button>
-            <pre id="fundOut" class="panel"></pre>
-
-            <!-- Company news -->
-            <input id="newsTicker" placeholder="Ticker for news (e.g., AAPL)" />
-            <input id="newsDays" type="number" value="30" min="1" max="365" />
-            <button id="btnNews">Get News</button>
-            <pre id="newsOut" class="panel"></pre>
+          </label>
+          <button id="btnIngest">Ingest Profiles</button>
         </div>
-        <div id="extra-analyzer">
-            <button id="btnFundV1">Analyze Fundamentals (v1)</button>
-            <button id="btnNews">Analyze News</button>
-            <button id="btnStreet">Analyze Street</button>
-            <button id="btnAdviceV1">Master Advice (v1)</button>
+        <pre id="outIngest" class="panel"></pre>
+      </section>
+
+      <section class="section">
+        <h2>Analyzers</h2>
+        <div class="actions">
+          <input id="anTicker" placeholder="Analyzer ticker (e.g., MSFT)" />
+          <button id="btnFund">Fundamentals v1</button>
+          <button id="btnStreet">Street View</button>
         </div>
+        <pre id="outFund" class="panel"></pre>
+        <pre id="outStreet" class="panel"></pre>
+        <div class="actions">
+          <input id="newsTicker" placeholder="News ticker (e.g., NVDA)" />
+          <input id="newsDays" type="number" min="1" max="365" value="30" />
+          <input id="newsLimit" type="number" min="1" max="20" value="8" />
+          <button id="btnNewsLoad">Load News</button>
+        </div>
+        <div id="newsList" class="news-list"></div>
+        <div class="actions">
+          <button id="btnNewsSummarize">Summarize Selected Headlines</button>
+        </div>
+        <pre id="outNewsSummary" class="panel"></pre>
+      </section>
+
+      <section class="section">
+        <h2>Master Advice</h2>
+        <div class="actions">
+          <input id="adviceTickers" placeholder="Tickers (comma separated)" />
+          <label class="inline">
+            Risk
+            <input id="adviceRisk" type="number" min="1" max="5" value="3" />
+          </label>
+          <button id="btnAdvice">Run Advice v1</button>
+        </div>
+        <pre id="outAdvice" class="panel"></pre>
+      </section>
+
+      <footer class="muted note">Requests may take a moment, especially on cold starts.</footer>
     </main>
     <script src="/app.js" defer></script>
   </body>

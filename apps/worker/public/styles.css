@@ -1,8 +1,23 @@
 :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
 body { margin: 0; background:#0b0b0b; color:#eaeaea; }
-.container { max-width: 860px; margin: 40px auto; padding: 16px; }
+.container { max-width: 880px; margin: 40px auto; padding: 16px; }
 .muted { opacity: .75; font-size: 14px; }
-.actions { display:flex; gap:12px; margin:16px 0; }
+.actions { display:flex; flex-wrap:wrap; gap:12px; margin:16px 0; align-items:center; }
 button { padding:8px 12px; border-radius:8px; border:1px solid #333; background:#1b1b1b; color:#fff; cursor:pointer; }
 button:hover { background:#262626; }
-.panel { background:#111; color:#9ef; padding:12px; border-radius:8px; min-height: 140px; overflow:auto; }
+.panel { background:#111; color:#9ef; padding:12px; border-radius:8px; min-height: 120px; overflow:auto; }
+
+.section { margin: 28px 0; padding: 16px; background:#101010; border:1px solid #1c1c1c; border-radius:12px; }
+.section h2 { margin: 0 0 12px 0; font-size: 20px; }
+.inline { display:flex; align-items:center; gap:8px; font-size: 14px; }
+input[type="text"], input[type="number"], input { background:#0f0f0f; border:1px solid #333; border-radius:8px; padding:8px 10px; color:#fff; min-width:160px; }
+input:focus { outline:none; border-color:#4b8dff; box-shadow:0 0 0 1px #4b8dff33; }
+
+.news-list { display:flex; flex-direction:column; gap:8px; max-height:240px; overflow-y:auto; margin:0 0 12px 0; }
+.news-item { background:#121212; border:1px solid #1f1f1f; border-radius:8px; padding:8px; }
+.news-item label { display:flex; gap:10px; align-items:flex-start; cursor:pointer; }
+.news-item input[type="checkbox"] { margin-top:4px; }
+.news-headline { font-weight:600; color:#f2f5ff; display:block; }
+.news-meta { font-size:12px; opacity:0.65; display:block; }
+
+.note { margin-top:24px; text-align:center; }

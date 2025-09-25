@@ -1,62 +1,78 @@
-// Worker: serve static files from /public and proxy API calls to Render.
-const API_BASE = "https://api-advisor.onrender.com"; // your Render API (no trailing slash)
+const API_BASE = "https://api-advisor.onrender.com";
+const NO_STORE = { "cache-control": "no-store" };
+
+async function proxyGet(path, search = "") {
+  return fetch(`${API_BASE}${path}${search}`, { headers: NO_STORE });
+}
+
+async function proxyJson(request, path) {
+  const body = await request.text();
+  const headers = { "content-type": request.headers.get("content-type") || "application/json" };
+  return fetch(`${API_BASE}${path}`, {
+    method: request.method,
+    headers,
+    body,
+  });
+}
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const path = url.pathname.replace(/\/+$/, "") || "/";
+    const pathname = url.pathname;
+    const path = pathname.replace(/\/+$/, "") || "/";
+    const method = request.method.toUpperCase();
 
-    // Proxy API endpoints
-    if (path === "/health" && request.method === "GET") {
-      return fetch(`${API_BASE}/health`, { headers: { "cache-control": "no-store" } });
+    if (method === "GET" && path === "/health") {
+      return proxyGet("/health");
     }
-    if (path === "/db/ping" && request.method === "GET") {
-      return fetch(`${API_BASE}/db/ping`, { headers: { "cache-control": "no-store" } });
+    if (method === "GET" && path === "/db/ping") {
+      return proxyGet("/db/ping");
     }
-    if (path === "/advice" && request.method === "POST") {
-      const body = await request.text();
-      return fetch(`${API_BASE}/advice`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body,
-      });
-    }
-    if (request.method === "GET" && url.pathname.startsWith("/finnhub/news")) {
-      return fetch(`${API_BASE}${url.pathname}${url.search}`, { headers: { "cache-control": "no-store" } });
-    }
-    if (request.method === "GET" && url.pathname.startsWith("/finnhub/recommendation")) {
-      return fetch(`${API_BASE}${url.pathname}${url.search}`, {
-        headers: { "cache-control": "no-store" },
-    });
-    }
-    if (path.startsWith("/analyze/fundamentals_v1") && request.method === "GET") {
-  const qs = url.search; // includes ?ticker=...
-  return fetch(`${API_BASE}/analyze/fundamentals_v1${qs}`, { headers: { "cache-control": "no-store" } });
-    }
-    if (path.startsWith("/analyze/news") && request.method === "GET") {
-      return fetch(`${API_BASE}/analyze/news${url.search}`, { headers: { "cache-control": "no-store" } });
-    }
-    if (path.startsWith("/analyze/street") && request.method === "GET") {
-      return fetch(`${API_BASE}/analyze/street${url.search}`, { headers: { "cache-control": "no-store" } });
-    }
-    if (path === "/advice/v1" && request.method === "POST") {
-      const body = await request.text();
-      return fetch(`${API_BASE}/advice/v1`, { method: "POST", headers: { "content-type":"application/json" }, body });
-    }
-    if (path === "/analyze/fundamentals" && request.method === "GET") {
-      return fetch(`${API_BASE}${url.pathname}${url.search}`, { headers: { "cache-control": "no-store" } });
-    }
-    if (path.startsWith("/asset/") && request.method === "GET") {
-      const ticker = encodeURIComponent(path.slice(7));
-      return fetch(`${API_BASE}/asset/${ticker}`, { headers: { "cache-control": "no-store" } });
-    }
-    if (path === "/ingest/finnhub" && request.method === "GET") {
-      return fetch(`${API_BASE}${url.pathname}${url.search}`, {
-        headers: { "cache-control": "no-store" },
-    });
-}
 
-    // Serve static assets from /public via assets binding
+    if (method === "POST" && path === "/advice") {
+      return proxyJson(request, "/advice");
+    }
+    if (method === "POST" && path === "/advice/v1") {
+      return proxyJson(request, "/advice/v1");
+    }
+
+    if (method === "GET" && path === "/ingest/finnhub") {
+      return proxyGet(path, url.search);
+    }
+
+    if (method === "GET" && pathname.startsWith("/finnhub/news")) {
+      return proxyGet(pathname, url.search);
+    }
+    if (method === "GET" && pathname.startsWith("/finnhub/recommendation")) {
+      return proxyGet(pathname, url.search);
+    }
+
+    if (method === "GET" && path === "/analyze/fundamentals") {
+      return proxyGet(path, url.search);
+    }
+    if (method === "GET" && path === "/analyze/fundamentals_v1") {
+      return proxyGet(path, url.search);
+    }
+    if (method === "GET" && path === "/analyze/news") {
+      return proxyGet(path, url.search);
+    }
+    if (method === "GET" && path === "/analyze/street") {
+      return proxyGet(path, url.search);
+    }
+    if (method === "POST" && path === "/analyze/news_refine") {
+      return proxyJson(request, "/analyze/news_refine");
+    }
+
+    if (method === "GET" && path.startsWith("/asset/")) {
+      const ticker = pathname.slice("/asset/".length);
+      const encoded = encodeURIComponent(ticker);
+      return fetch(`${API_BASE}/asset/${encoded}`, { headers: NO_STORE });
+    }
+
+    if (method === "GET" && path.startsWith("/finnhub")) {
+      return proxyGet(pathname, url.search);
+    }
+
     return env.ASSETS.fetch(request);
   }
 };
