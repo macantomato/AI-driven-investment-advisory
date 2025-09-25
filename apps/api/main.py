@@ -486,8 +486,7 @@ def _fmt_money(x: float | None) -> str:
     if absx >= 1e3:  return f"${x/1e3:.2f}K"
     return f"${x:,.0f}"
     
-@app.get("/analyze/fundamentals_v1")
-def analyze_fundamentals_v1(ticker: str = Query(..., min_length=1)):
+def _analyze_fundamentals_v1_core(ticker: str) -> dict:
     item = _get_asset_item(ticker)
     if not item:
         raise HTTPException(status_code=404, detail="Asset not found")
@@ -558,12 +557,12 @@ def analyze_fundamentals_v1(ticker: str = Query(..., min_length=1)):
         "disclaimer": DISCLAIMER_LINK,
     }
 
-@app.get("/analyze/news")
-def analyze_news(
-    ticker: str = Query(..., min_length=1),
-    days: int = Query(30, ge=1, le=365),
-    limit: int = Query(10, ge=3, le=30),
-):
+
+@app.get("/analyze/fundamentals_v1")
+def analyze_fundamentals_v1(ticker: str = Query(..., min_length=1)):
+    return _analyze_fundamentals_v1_core(ticker)
+
+def _analyze_news_core(ticker: str, *, days: int, limit: int) -> Dict[str, Any]:
     from providers.finnhub import fetch_company_news
     items = fetch_company_news(ticker, days=days, limit=limit)
     headlines = [f"- {it.get('headline','')}" for it in items][:limit]
@@ -602,6 +601,15 @@ def analyze_news(
         "sentiment": sentiment,
         "disclaimer": DISCLAIMER_LINK,
     }
+
+
+@app.get("/analyze/news")
+def analyze_news(
+    ticker: str = Query(..., min_length=1),
+    days: int = Query(30, ge=1, le=365),
+    limit: int = Query(10, ge=3, le=30),
+):
+    return _analyze_news_core(ticker, days=days, limit=limit)
 
 
 @app.post("/analyze/news_refine")
@@ -667,8 +675,7 @@ def analyze_news_refine(payload: dict = Body(...)) -> Dict[str, Any]:
     return result
 
 
-@app.get("/analyze/street")
-def analyze_street(ticker: str = Query(..., min_length=1)):
+def _analyze_street_core(ticker: str) -> dict:
     from providers.finnhub import fetch_finnhub_recommendation
     rows = fetch_finnhub_recommendation(ticker) or []
 
@@ -698,6 +705,11 @@ def analyze_street(ticker: str = Query(..., min_length=1)):
         "disclaimer": DISCLAIMER_LINK,
     }
 
+
+@app.get("/analyze/street")
+def analyze_street(ticker: str = Query(..., min_length=1)):
+    return _analyze_street_core(ticker)
+
 class AdviceV1Request(BaseModel):
     tickers: List[str] = Field(min_items=1, max_items=10)
     risk: int = Field(3, ge=1, le=5)
@@ -709,9 +721,9 @@ def advice_v1(body: AdviceV1Request):
 
     per = []
     for t in tickers:
-        fundamentals = analyze_fundamentals_v1.__wrapped__(ticker=t)  # call handler logic
-        street = analyze_street.__wrapped__(ticker=t)
-        news = analyze_news.__wrapped__(ticker=t, days=14, limit=5)
+        fundamentals = _analyze_fundamentals_v1_core(t)
+        street = _analyze_street_core(t)
+        news = _analyze_news_core(t, days=14, limit=5)
         per.append({"ticker": t, "fundamentals": fundamentals, "street": street, "news": news})
 
     client = get_llm()
