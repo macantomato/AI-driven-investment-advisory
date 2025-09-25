@@ -706,6 +706,121 @@ def _analyze_street_core(ticker: str) -> dict:
     }
 
 
+def _combine_strategy_signals(fundamentals: Dict[str, Any], street: Dict[str, Any], news: Dict[str, Any]) -> Dict[str, Any]:
+    score = fundamentals.get("score")
+    base = float(score) if isinstance(score, (int, float)) else 50.0
+    base = max(base, 1.0)
+
+    stance = (street.get("stance") or "mixed").lower()
+    if stance == "bullish":
+        base *= 1.1
+    elif stance == "bearish":
+        base *= 0.9
+
+    analysts = int(street.get("total_analysts") or 0)
+
+    sentiment_val: Optional[float]
+    sentiment = news.get("sentiment")
+    if isinstance(sentiment, (int, float)):
+        sentiment_val = max(-1.0, min(1.0, float(sentiment)))
+        base *= (1 + sentiment_val * 0.1)
+    else:
+        sentiment_val = None
+
+    # small coverage adjustment so news volume influences the weighting slightly
+    news_count = int(news.get("count") or 0)
+    base *= 1 + min(news_count, 10) * 0.005
+
+    return {
+        "fundamental_score": score,
+        "street_stance": stance,
+        "street_analysts": analysts,
+        "news_count": news_count,
+        "news_sentiment": sentiment_val,
+        "weight_basis": max(base, 0.1),
+    }
+
+
+def _normalize_allocation(weights: List[tuple[str, float]]) -> Dict[str, float]:
+    filtered: list[tuple[str, float]] = []
+    for ticker, value in weights:
+        if value is None:
+            continue
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            continue
+        if not (numeric == numeric):  # NaN check
+            continue
+        filtered.append((ticker, max(numeric, 0.1)))
+
+    if not filtered:
+        return {}
+
+    total = sum(value for _, value in filtered)
+    if total <= 0:
+        share = round(1 / len(filtered), 4)
+        return {ticker: share for ticker, _ in filtered}
+
+    allocation = {ticker: value / total for ticker, value in filtered}
+    return {ticker: round(weight, 4) for ticker, weight in allocation.items()}
+
+
+def _build_data_rationale(per: List[Dict[str, Any]], allocation: Dict[str, float], risk: int) -> str:
+    sections: List[str] = [f"Risk level {risk} (1=conservative, 5=aggressive)."]
+
+    for entry in per:
+        ticker = entry["ticker"]
+        signals = entry.get("signals") or {}
+        fundamentals = entry.get("fundamentals") or {}
+        metrics = fundamentals.get("metrics") or {}
+        street = entry.get("street") or {}
+        news = entry.get("news") or {}
+
+        metric_bits: List[str] = []
+        pe = metrics.get("pe")
+        if isinstance(pe, (int, float)):
+            metric_bits.append(f"PE {pe:.1f}")
+        roe = metrics.get("roe")
+        if isinstance(roe, (int, float)):
+            metric_bits.append(f"ROE {roe:.1f}%")
+        dte = metrics.get("debtToEquity")
+        if isinstance(dte, (int, float)):
+            metric_bits.append(f"Debt/Equity {dte:.2f}")
+        beta = metrics.get("beta")
+        if isinstance(beta, (int, float)):
+            metric_bits.append(f"Beta {beta:.2f}")
+
+        stance = (street.get("stance") or "mixed").lower()
+        analysts = int(street.get("total_analysts") or 0)
+        street_part = f"street view {stance}"
+        if analysts:
+            street_part += f" from {analysts} analysts"
+
+        news_summary = (news.get("summary") or "").strip()
+        if not news_summary or news_summary.lower().startswith("no llm summary"):
+            news_summary = f"{news.get('count', 0)} recent headlines reviewed."
+        elif len(news_summary) > 180:
+            news_summary = news_summary[:177] + "..."
+
+        news_sentiment = signals.get("news_sentiment")
+        sentiment_text = f" Sentiment {news_sentiment:+.2f}." if isinstance(news_sentiment, (int, float)) else ""
+
+        weight = allocation.get(ticker)
+        weight_text = f" Proposed weight {weight * 100:.1f}%." if weight is not None else ""
+
+        sections.append(
+            f"{ticker}: fundamentals score {signals.get('fundamental_score', 'n/a')}"
+            f" ({', '.join(metric_bits) if metric_bits else 'limited metrics'}); {street_part}. "
+            f"News insight: {news_summary}.{sentiment_text}{weight_text}"
+        )
+
+    sections.append("Weights favour stronger fundamentals and supportive sentiment while keeping diversification in mind.")
+    sections.append(DISCLAIMER_LINK)
+
+    return " ".join(part.strip() for part in sections if part)
+
+
 @app.get("/analyze/street")
 def analyze_street(ticker: str = Query(..., min_length=1)):
     return _analyze_street_core(ticker)
@@ -719,54 +834,82 @@ def advice_v1(body: AdviceV1Request):
     tickers = [t.strip().upper() for t in body.tickers if t and t.strip()]
     tickers = list(dict.fromkeys(tickers))[:10]
 
-    per = []
+    per: List[Dict[str, Any]] = []
+    weight_inputs: List[tuple[str, float]] = []
     for t in tickers:
         fundamentals = _analyze_fundamentals_v1_core(t)
         street = _analyze_street_core(t)
         news = _analyze_news_core(t, days=14, limit=5)
-        per.append({"ticker": t, "fundamentals": fundamentals, "street": street, "news": news})
+        signals = _combine_strategy_signals(fundamentals, street, news)
+        per.append({
+            "ticker": t,
+            "fundamentals": fundamentals,
+            "street": street,
+            "news": news,
+            "signals": signals,
+        })
+        weight_inputs.append((t, signals.get("weight_basis")))
+
+    allocation = _normalize_allocation(weight_inputs)
+    if not allocation and tickers:
+        share = round(1 / len(tickers), 4)
+        allocation = {t: share for t in tickers}
+
+    data_rationale = _build_data_rationale(per, allocation, body.risk)
 
     client = get_llm()
-    rationale = "LLM not configured."
-    allocation = {t: round(1/len(tickers), 4) for t in tickers} if tickers else {}
+    rationale = data_rationale
 
     if client:
         try:
             lines = []
-            for p in per:
-                f = p["fundamentals"]; s = p["street"]; n = p["news"]
+            for entry in per:
+                ticker = entry["ticker"]
+                signals = entry.get("signals") or {}
+                street = entry.get("street") or {}
+                news = entry.get("news") or {}
+
+                news_summary = (news.get("summary") or "").strip()
+                if len(news_summary) > 220:
+                    news_summary = news_summary[:217] + "..."
+
                 lines.append(
-                    f"{p['ticker']}: score={f.get('score')}, "
-                    f"pe={f['metrics'].get('pe')}, roe={f['metrics'].get('roe')}, "
-                    f"dte={f['metrics'].get('debtToEquity')}, beta={f['metrics'].get('beta')}, "
-                    f"street={s.get('stance')} ({s.get('total_analysts')} analysts), "
-                    f"news_count={n.get('count')}"
+                    f"{ticker}: fundamental_score={signals.get('fundamental_score')}, "
+                    f"street={street.get('stance')} ({street.get('total_analysts')} analysts), "
+                    f"news_sentiment={signals.get('news_sentiment')}, headlines={news.get('count')}, "
+                    f"allocation_hint={allocation.get(ticker)}, summary=\"{news_summary or 'n/a'}\""
                 )
+
             prompt = (
                 "You're an educational investment assistant. Given risk level "
-                f"{body.risk} (1=conservative, 5=aggressive) and the following per-ticker summaries,\n"
-                "1) suggest a simple diversified allocation (weights summing to 100%),\n"
-                "2) give a brief rationale (120-180 words),\n"
-                "3) include 2 risks to monitor.\n"
-                "Do not give financial advice; be educational and generic.\n\n"
+                f"{body.risk} (1=conservative, 5=aggressive) and these data-driven summaries,\n"
+                "1) suggest diversified allocation weights summing to 100%,\n"
+                "2) provide a concise rationale (120-180 words) that cites fundamentals, street outlook, and news,\n"
+                "3) list two monitoring risks.\n"
+                "Stay educational and avoid investment advice.\n\n"
                 + "\n".join(lines)
             )
             resp = client.chat.completions.create(
                 model="meta-llama/llama-4-scout-17b-16e-instruct",
-                temperature=0.2, max_tokens=400, timeout=25,
-                messages=[{"role":"system","content":"Be concise, educational, balanced."},
-                          {"role":"user","content":prompt}]
+                temperature=0.2,
+                max_tokens=420,
+                timeout=25,
+                messages=[
+                    {"role": "system", "content": "Be concise, educational, balanced."},
+                    {"role": "user", "content": prompt},
+                ],
             )
-            rationale = (resp.choices[0].message.content or "").strip()
-
+            llm_text = (resp.choices[0].message.content or "").strip()
+            if llm_text:
+                rationale = llm_text
         except Exception:
-            pass
+            rationale = data_rationale
 
     return {
         "risk": body.risk,
         "tickers": tickers,
         "per_ticker": per,
-        "allocation": allocation, 
+        "allocation": allocation,
         "rationale": rationale,
         "disclaimer": DISCLAIMER_LINK,
     }
